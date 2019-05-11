@@ -4,7 +4,6 @@ int func(int x, int y)
 {
 	check();
 	return x;
-	return y;
 }
 
 int main(){

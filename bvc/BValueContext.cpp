@@ -45,17 +45,17 @@ namespace{
 			static char ID;
 			BValueContext() : FunctionPass(ID){}
 			virtual bool runOnFunction(Function &F) {
-				errs()<<F.getName()<<'\n';
 				if(F.getName() == "main")
 				{
+				    errs() << "Main block start" << '\n';
 					initContext(F, forwardBI, backwardBI);
 					
-					while(!forwardWorklist.empty() or !backwardWorklist.empty())
+					while(!forwardWorklist.empty())
 					{
 						// doAnalysisBackward();
 						doAnalysisForward();
 					}
-					
+					errs() << "Main block end" << '\n';
 				}
 				return false;
 			}
@@ -63,6 +63,7 @@ namespace{
 			//function to initialize a new context
 			void initContext(Function &F, std::vector<bool> forwardEntryValue, std::vector<bool> backwardEntryValue)
 			{
+			    errs() << "initContext start" << '\n';
 				static int contextId = 0;
 				std::string mName = F.getName();
 
@@ -102,13 +103,14 @@ namespace{
 				Instruction* end = &(*std::get<1>(tempWorklist[tempWorklist.size()-1])->rbegin());
 				IN[std::make_tuple(contextId, mName, start)].first = forwardEntryValue;
 				OUT[std::make_tuple(contextId, mName, end)].second = backwardEntryValue;
-
+                errs() << "initContext end" << '\n';
 			}
 
 
 			//procedure to do forward analysis
 			void doAnalysisForward()
 			{
+			    errs() << "doAnalysisForward start" << '\n';
 				while(!forwardWorklist.empty()){
 					int contextId;
 					std::string methodName;
@@ -133,8 +135,8 @@ namespace{
 					for(auto insBB=currentBlock->begin();insBB!=currentBlock->end();insBB++){
 						Instruction* currentIns = &(*insBB);
 						//function call
-						if(currentIns->getOpcode() == 54){
-
+						if(currentIns->getOpcode() == 55){
+						    errs() << currentIns->getOperand(0)->getName()<<'\n';
 						}
 						else{
 							OUT[std::make_tuple(contextId, methodName, currentIns)].first = forwardNormalFlowFunction(currentIns, methodName, contextId);
@@ -146,16 +148,19 @@ namespace{
 						forwardWorklist.pop_front();
 					}
 				}
+				errs() << "doAnalysisForward end" << '\n';
 			}
 
 			std::vector<bool> merge(Instruction* ins, Instruction* pred, std::string methodName, int contextId)
 			{
+//			    errs() << "merge called" << '\n';
 				//return IN[contextId, methodName, currentBlock] merge OUT[contextId, methodName, pred]
 				return IN[std::make_tuple(contextId, methodName, ins)].first;
 			}
 
 			std::vector<bool> forwardNormalFlowFunction(Instruction* ins, std::string methodName, int contextId)
 			{
+//			    errs() << "forwardNormalFlwFunction called" << '\n';
 				/*
 					Perform normal flow operation
 					Compute GEN, KILL
