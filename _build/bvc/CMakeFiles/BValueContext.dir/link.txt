@@ -1,0 +1,1 @@
+/usr/bin/clang++-8 -fPIC   -shared  -o libBValueContext.so CMakeFiles/BValueContext.dir/BValueContext.cpp.o  -L/usr/lib/llvm-8/lib 

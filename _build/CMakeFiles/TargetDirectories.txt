@@ -1,0 +1,6 @@
+/home/harsh/Desktop/MTP/Bi-Directional Value Context/_build/CMakeFiles/rebuild_cache.dir
+/home/harsh/Desktop/MTP/Bi-Directional Value Context/_build/CMakeFiles/intrinsics_gen.dir
+/home/harsh/Desktop/MTP/Bi-Directional Value Context/_build/CMakeFiles/edit_cache.dir
+/home/harsh/Desktop/MTP/Bi-Directional Value Context/_build/bvc/CMakeFiles/rebuild_cache.dir
+/home/harsh/Desktop/MTP/Bi-Directional Value Context/_build/bvc/CMakeFiles/BValueContext.dir
+/home/harsh/Desktop/MTP/Bi-Directional Value Context/_build/bvc/CMakeFiles/edit_cache.dir
