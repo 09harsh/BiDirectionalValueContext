@@ -16,8 +16,8 @@
 #include <bits/stdc++.h>
 using namespace llvm;
 
-namespace{
-
+namespace
+{
 	using methodName = std::string;
 	using contextId = int;
 	using forwardEntryValue = std::vector<bool>;
@@ -33,6 +33,7 @@ namespace{
 	using callee = std::map<callSite, contextId>;
 	
 	//declaring globals
+	static int context = 0;
 	std::map<std::tuple<methodName, forwardEntryValue, backwardEntryValue>, std::tuple<contextId, forwardExitValue, backwardExitValue>> transitionTable;
 	std::map<contextId, std::pair<callers, callee>> transitionGraph;
 	std::deque<std::tuple<methodName, blockId, contextId>> forwardWorklist, backwardWorklist;
@@ -40,15 +41,18 @@ namespace{
 	std::map<std::tuple<contextId, methodName, insId>, std::pair<forwardDataFlowValue, backwardDataFlowValue>> IN, OUT;
 
 	//functionPass
-	class BValueContext : public FunctionPass{
+	class BValueContext : public FunctionPass
+	{
 		public:
 			static char ID;
 			BValueContext() : FunctionPass(ID){}
-			virtual bool runOnFunction(Function &F) {
+			virtual bool runOnFunction(Function &F)
+			{
 				if(F.getName() == "main")
 				{
 				    errs() << "Main block start" << '\n';
-					initContext(F, forwardBI, backwardBI);
+				    context++;
+					initContext(&F, forwardBI, backwardBI);
 					
 					while(!forwardWorklist.empty())
 					{
@@ -61,14 +65,16 @@ namespace{
 			}
 
 			//function to initialize a new context
-			void initContext(Function &F, std::vector<bool> forwardEntryValue, std::vector<bool> backwardEntryValue)
+			void initContext(Function *F, std::vector<bool> forwardEntryValue, std::vector<bool> backwardEntryValue)
 			{
 			    errs() << "initContext start" << '\n';
-				static int contextId = 0;
-				std::string mName = F.getName();
+				std::string mName = F->getName();
 
 				//registering into transition table
-				transitionTable[std::make_tuple(mName, forwardEntryValue, backwardEntryValue)] = std::make_tuple(++contextId, forwardTop, backwardTop);
+				transitionTable[std::make_tuple(mName, forwardEntryValue, backwardEntryValue)] = std::make_tuple(context, forwardTop, backwardTop);
+
+				//updating transition graph
+				transitionGraph[context];
 
 				/*
 					filling backwardWorklist
@@ -78,31 +84,34 @@ namespace{
 				std::vector<std::tuple<std::string, BasicBlock*, int>> tempWorklist;
 				BasicBlock* nullBlock = NULL;
 				backwardWorklist.push_back(std::make_tuple(mName, nullBlock, 1));
-				for(Function::iterator bb=F.begin(), e=F.end(); e!=bb;++bb){
+				for(Function::iterator bb=F->begin(), e=F->end(); e!=bb;++bb)
+				{
 					BasicBlock *BB = &(*bb);
-					backwardWorklist.push_back(std::make_tuple(mName, BB, contextId));
-					tempWorklist.push_back(std::make_tuple(mName, BB, contextId));
+					backwardWorklist.push_back(std::make_tuple(mName, BB, context));
+					tempWorklist.push_back(std::make_tuple(mName, BB, context));
 					
 					//initializing IN and OUT with 'top' value
-					for(BasicBlock::iterator i=bb->begin(), e=bb->end(); i!=e; ++i){
+					for(BasicBlock::iterator i=bb->begin(), e=bb->end(); i!=e; ++i)
+					{
 						Instruction* I = &(*i);
-						IN[std::make_tuple(contextId, mName, I)] = std::make_pair(forwardTop, backwardTop);
-						OUT[std::make_tuple(contextId, mName, I)] = std::make_pair(forwardTop, backwardTop);
+						IN[std::make_tuple(context, mName, I)] = std::make_pair(forwardTop, backwardTop);
+						OUT[std::make_tuple(context, mName, I)] = std::make_pair(forwardTop, backwardTop);
 					}
 				}
 				backwardWorklist.push_back(std::make_tuple(mName, nullBlock, 0));
 
 				// filling forwardWorklist
 				forwardWorklist.push_front(std::make_tuple(mName, nullBlock, 1));
-				for(int i=tempWorklist.size()-1; i>=0; i--){
+				for(int i=tempWorklist.size()-1; i>=0; i--)
+				{
 					forwardWorklist.push_front(tempWorklist[i]);
 				}
 				forwardWorklist.push_front(std::make_tuple(mName, nullBlock, 0));
 
-				Instruction* start = &(*F.begin()->begin());
+				Instruction* start = &(*F->begin()->begin());
 				Instruction* end = &(*std::get<1>(tempWorklist[tempWorklist.size()-1])->rbegin());
-				IN[std::make_tuple(contextId, mName, start)].first = forwardEntryValue;
-				OUT[std::make_tuple(contextId, mName, end)].second = backwardEntryValue;
+				IN[std::make_tuple(context, mName, start)].first = forwardEntryValue;
+				OUT[std::make_tuple(context, mName, end)].second = backwardEntryValue;
                 errs() << "initContext end" << '\n';
 			}
 
@@ -111,7 +120,8 @@ namespace{
 			void doAnalysisForward()
 			{
 			    errs() << "doAnalysisForward start" << '\n';
-				while(!forwardWorklist.empty()){
+				while(!forwardWorklist.empty())
+				{
 					int contextId;
 					std::string methodName;
 					BasicBlock* currentBlock;
@@ -119,31 +129,70 @@ namespace{
 					forwardWorklist.pop_front();
 
 					// an entry node 
-					if(currentBlock == NULL){
+					if(currentBlock == NULL)
+					{
 						std::tie(methodName, currentBlock, contextId) = forwardWorklist.front();
 						forwardWorklist.pop_front();
 					}
-					else{
+					else
+					{
 						Instruction* firstInc = &(*currentBlock->begin());
 						IN[std::make_tuple(contextId, methodName, firstInc)].first = forwardTop;
-						for(auto it = pred_begin(currentBlock), et = pred_end(currentBlock); it != et; ++it){
+						for(auto it = pred_begin(currentBlock), et = pred_end(currentBlock); it != et; ++it)
+						{
 							BasicBlock* pred = *it;
 							Instruction* pred_ins = &(*pred->rbegin());
 							IN[std::make_tuple(contextId, methodName, firstInc)].first = merge(firstInc, pred_ins, methodName, contextId);
 						}
 					}
-					for(auto insBB=currentBlock->begin();insBB!=currentBlock->end();insBB++){
+					for(auto insBB=currentBlock->begin();insBB!=currentBlock->end();insBB++)
+					{
 						Instruction* currentIns = &(*insBB);
-						//function call
-						if(currentIns->getOpcode() == 55){
-						    errs() << currentIns->getOperand(0)->getName()<<'\n';
+						if(insBB != currentBlock->begin())
+						{
+							auto tempIns = insBB;
+							tempIns--;
+							IN[std::make_tuple(contextId, methodName, currentIns)].first = OUT[std::make_tuple(contextId, methodName, &(*tempIns))].first;
 						}
-						else{
+						//function call
+						if(currentIns->getOpcode() == 55)
+						{
+						    errs() << " Function call " << '\n';
+						    int numberOfArg = currentIns->operands().end() - currentIns->operands().begin() - 1;
+						    std::string funcName = currentIns->getOperand(numberOfArg)->getName();
+						    if(funcName == "_Z5checkv")
+						        performChecking();  //checker code
+						    else
+						    {
+                                //check existance of function in transition table
+                                std::vector<bool> fIN = IN[std::make_tuple(contextId, methodName, currentIns)].first;
+                                std::vector<bool> bIN = IN[std::make_tuple(contextId, methodName, currentIns)].second;
+
+                                //does not exist
+                                if(transitionTable.find(std::make_tuple(funcName, fIN, bIN)) == transitionTable.end())
+                                {
+                                    context++;
+                                    Function* calledFunction = cast<CallInst>(currentIns)->getCalledFunction();
+                                    initContext(calledFunction, fIN, bIN);
+
+                                    //setting up the edges of new context
+//                                    transitionGraph[context].first.push_back(std::make_pair(methodName, currentIns));
+
+                                    //setting up the edges of calling context
+//                                    transitionGraph[contextId].second.push_back(std::make_pair(methodName, currentIns));
+                                }
+                                else
+                                {}
+						    }
+						}
+						else
+						{
+						    errs() << " normal ins call " << '\n';
 							OUT[std::make_tuple(contextId, methodName, currentIns)].first = forwardNormalFlowFunction(currentIns, methodName, contextId);
 						}
 					}
 					//if next block is return block
-					if(std::get<1>(forwardWorklist.front()) == NULL)
+					while(!forwardWorklist.empty() and std::get<1>(forwardWorklist.front()) == NULL)
 					{
 						forwardWorklist.pop_front();
 					}
@@ -167,6 +216,17 @@ namespace{
 					and return OUT = (IN - KILL) U GEN;
 				*/
 				return OUT[std::make_tuple(contextId, methodName, ins)].first;
+			}
+
+			void performChecking()
+			{
+			    errs() << '\t' << "Check under progress" << '\n';
+			    errs() << "***********************************\n";
+			    errs() << "Context\tcallers\tcallee\n";
+			    for(auto i : transitionGraph)
+			        errs() << i.first << "-> " << i.second.first.size() << " -> " << i.second.second.size() << "\n";
+			    errs() << forwardWorklist.size() << '\n';
+			    errs() << "***********************************\n";
 			}
 
 
