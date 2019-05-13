@@ -27,10 +27,10 @@ namespace
 	using forwardDataFlowValue = std::vector<bool>;
 	using backwardDataFlowValue = std::vector<bool>;
 	using callSite = BasicBlock*;
-	using callers = std::vector<std::pair<methodName, callSite>>;
+	using callers = std::vector<std::tuple<methodName, callSite, contextId>>;
 	using blockId = BasicBlock*;
 	using insId = Instruction*;
-	using callee = std::map<callSite, contextId>;
+	using callee = std::map<std::pair<callSite, insId>, contextId>;
 	
 	//declaring globals
 	static int context = 0;
@@ -142,7 +142,11 @@ namespace
 						{
 							BasicBlock* pred = *it;
 							Instruction* pred_ins = &(*pred->rbegin());
-							IN[std::make_tuple(contextId, methodName, firstInc)].first = merge(firstInc, pred_ins, methodName, contextId);
+
+							std::vector<bool> a1,a2;
+							a1 = IN[std::make_tuple(contextId, methodName, firstInc)].first;
+							a2 = OUT[std::make_tuple(contextId, methodName, pred_ins)].first;
+							IN[std::make_tuple(contextId, methodName, firstInc)].first = merge(a1,a2);
 						}
 					}
 					for(auto insBB=currentBlock->begin();insBB!=currentBlock->end();insBB++)
@@ -169,20 +173,25 @@ namespace
                                 std::vector<bool> bIN = IN[std::make_tuple(contextId, methodName, currentIns)].second;
 
                                 //does not exist
+                                int newContext;
                                 if(transitionTable.find(std::make_tuple(funcName, fIN, bIN)) == transitionTable.end())
                                 {
-                                    context++;
+                                    newContext = ++context;
                                     Function* calledFunction = cast<CallInst>(currentIns)->getCalledFunction();
                                     initContext(calledFunction, fIN, bIN);
-
-                                    //setting up the edges of new context
-//                                    transitionGraph[context].first.push_back(std::make_pair(methodName, currentIns));
-
-                                    //setting up the edges of calling context
-//                                    transitionGraph[contextId].second.push_back(std::make_pair(methodName, currentIns));
                                 }
                                 else
-                                {}
+                                {
+                                    newContext = std::get<0>(transitionTable[std::make_tuple(funcName, fIN, bIN)]);
+                                    std::vector<bool> outFlow = std::get<1>(transitionTable[std::make_tuple(funcName, fIN, bIN)]);
+                                    std::vector<bool> prevOUT = OUT[std::make_tuple(contextId, methodName, currentIns)].first;
+                                    OUT[std::make_tuple(contextId, methodName, currentIns)].first = merge(prevOUT, outFlow);
+                                }
+                                //setting up the edges of new context
+                                transitionGraph[context].first.push_back(std::make_tuple(methodName, currentBlock, contextId));
+
+                                //setting up the edges of calling context
+                                transitionGraph[contextId].second[std::make_pair(currentBlock, currentIns)] = context;
 						    }
 						}
 						else
@@ -200,11 +209,10 @@ namespace
 				errs() << "doAnalysisForward end" << '\n';
 			}
 
-			std::vector<bool> merge(Instruction* ins, Instruction* pred, std::string methodName, int contextId)
+			std::vector<bool> merge(std::vector<bool> a1, std::vector<bool> a2)
 			{
-//			    errs() << "merge called" << '\n';
-				//return IN[contextId, methodName, currentBlock] merge OUT[contextId, methodName, pred]
-				return IN[std::make_tuple(contextId, methodName, ins)].first;
+				// a1 merge a2
+				return a1;
 			}
 
 			std::vector<bool> forwardNormalFlowFunction(Instruction* ins, std::string methodName, int contextId)
