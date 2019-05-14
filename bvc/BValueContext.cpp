@@ -39,6 +39,7 @@ namespace
 	std::vector<bool> forwardBI, backwardBI, forwardTop, forwardBottom, backwardTop, backwardBottom;
 	std::map<std::tuple<contextId, Function*, insId>, std::pair<forwardDataFlowValue, backwardDataFlowValue>> IN, OUT;
 	std::map<std::pair<contextId, Function*>, std::pair<forwardEntryValue, backwardEntryValue>> inValues;
+	std::map<Function*, Instruction*> funcTolastIns;
 
 	//functionPass
 	class BValueContext : public FunctionPass
@@ -105,7 +106,9 @@ namespace
 				Instruction* end = &(*std::get<1>(tempWorklist[tempWorklist.size()-1])->rbegin());
 				IN[std::make_tuple(context, F, start)].first = forwardEntryValue;
 				OUT[std::make_tuple(context, F, end)].second = backwardEntryValue;
+				funcTolastIns[F] = end;
                 errs() << "initContext end" << '\n';
+                tempWorklist.clear();
 			}
 
 
@@ -210,12 +213,21 @@ namespace
 					//if next block is return block
 					while(!forwardWorklist.empty() and std::get<1>(forwardWorklist.front()) == NULL)
 					{
-//					    std::string mName = get<0>(forwardWorklist.front());
-//					    int mContext = get<2>(forwardWorklist.front());
-//					    std::vector<bool> fIN = inValues[std::make_pair(mContext, mName)].first;
-//					    std::vector<bool> bIN = inValues[std::make_pair(mContext, mName)].second;
-//					    transitionTable[std::make_tuple(mName,fIN, bIN)] = OUT[std::make_tuple()];
-						forwardWorklist.pop_front();
+					    Function* function = std::get<0>(forwardWorklist.front());
+					    int funcContext = std::get<2>(forwardWorklist.front());
+					    forwardWorklist.pop_front();
+					    std::vector<bool> fIN = inValues[std::make_pair(funcContext, function)].first;
+					    std::vector<bool> bIN = inValues[std::make_pair(funcContext, function)].second;
+					    Instruction* lastIns = funcTolastIns[function];
+					    //setting outflow
+					    std::get<1>(transitionTable[std::make_tuple(function,fIN, bIN)]) = OUT[std::make_tuple(funcContext, function, lastIns)].first;
+					    std::get<2>(transitionTable[std::make_tuple(function,fIN, bIN)]) = OUT[std::make_tuple(funcContext, function, lastIns)].second;
+					    for(auto callers : transitionGraph[funcContext].first)
+					    {
+					        forwardWorklist.push_front(callers);
+					        backwardWorklist.push_back(callers);
+					    }
+
 					}
 				}
 				errs() << "doAnalysisForward end" << '\n';
