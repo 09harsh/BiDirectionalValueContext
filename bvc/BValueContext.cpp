@@ -233,11 +233,95 @@ namespace
 				errs() << "doAnalysisForward end" << '\n';
 			}
 
+			void doAnalysisBackward()
+			{
+			    errs() << "doAnalysisBackward strt" << '\n';
+			    while(!backwardWorklist.empty())
+			    {
+			        int currentContext;
+			        Function* currentFunction;
+			        BasicBlock* currentBlock;
+			        std::tie(currentFunction, currentBlock, currentContext) = backwardWorklist.back();
+					backwardWorklist.pop_back();
+
+					//if entry node
+					if(currentBlock == NULL)
+					{
+					    std::tie(currentFunction, currentBlock, currentContext) = backwardWorklist.back();
+					    backwardWorklist.pop_back();
+					}
+					else
+					{
+					    Instruction* lastIns = &(*currentBlock->getTerminator());
+					    OUT[std::make_tuple(currentContext, currentFunction, lastIns)].second = backwardTop;
+					    for(BasicBlock* Succ : successors(currentBlock))
+					    {
+					        Instruction* succIns = &(*Succ->begin());
+					        std::vector<bool> prevOUT, succIN;
+					        prevOUT = OUT[std::make_tuple(currentContext, currentFunction, lastIns)].second;
+					        succIN = IN[std::make_tuple(currentContext, currentFunction, succIns)].second;
+					        OUT[std::make_tuple(currentContext, currentFunction, lastIns)].second = backwardMerge(prevOUT, succIN);
+					    }
+					}
+					for(auto insBB=currentBlock->rbegin();insBB!=currentBlock->rend();insBB++)
+					{
+					    Instruction* currentIns = &(*insBB);
+					    if(insBB != currentBlock->rbegin())
+					    {
+					        auto tempIns = insBB;
+					        tempIns--;
+					        OUT[std::make_tuple(currentContext, currentFunction, currentIns)].second = IN[std::make_tuple(currentContext, currentFunction, &(*tempIns))].second;
+					    }
+					    //function call
+					    if(currentIns->getOpcode() == 55)
+					    {
+					        int numberOfArg = currentIns->operands().end() - currentIns->operands().begin() - 1;
+						    Function* calledFunction = cast<CallInst>(currentIns)->getCalledFunction();
+						    if(calledFunction->getName() == "_Z5checkv")
+						    {
+						        performChecking();  //checker code
+						    }
+						    else
+						    {
+						        //check for existance in transiation table
+                                std::vector<bool> fOUT = OUT[std::make_tuple(currentContext, currentFunction, currentIns)].first;
+                                std::vector<bool> bOUT = OUT[std::make_tuple(currentContext, currentFunction, currentIns)].second;
+
+                                //does not exist
+
+
+						    }
+					    }
+					    else
+					    {
+					        IN[std::make_tuple(currentContext, currentFunction, currentIns)].second = backwardNormalFunction(currentIns, currentFunction, currentContext);
+					    }
+					}
+			    }
+			    errs() << "doAnalysisBackward end" << '\n';
+			}
+
 			std::vector<bool> merge(std::vector<bool> a1, std::vector<bool> a2)
 			{
 				// a1 merge a2
 				return a1;
 			}
+
+            std::vector<bool> backwardMerge(std::vector<bool> prevOUT, std::vector<bool> succIN)
+			{
+				// prevOUT merge succIN
+				return prevOUT;
+			}
+
+            std::vector<bool> backwardNormalFunction(Instruction* ins, Function* function, int contextId)
+            {
+                /*
+					Perform normal flow operation
+					Compute GEN, KILL
+					and return OUT = (IN - KILL) U GEN;
+				*/
+				return IN[std::make_tuple(contextId, function, ins)].second;
+            }
 
 			std::vector<bool> forwardNormalFlowFunction(Instruction* ins, Function* currentFunction, int contextId)
 			{
