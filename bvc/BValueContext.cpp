@@ -51,24 +51,29 @@ namespace
 			{
 				if(F.getName() == "main")
 				{
-				    errs() << "Main block start" << '\n';
+				    errs() << " main() function start" << "\n";
 				    context++;
-					initContext(&F, forwardBI, backwardBI);
+					initContext(&F, forwardBI, backwardBI, 1);
 					
-					while(!forwardWorklist.empty())
+					while(!forwardWorklist.empty() or !backwardWorklist.empty())
 					{
-						// doAnalysisBackward();
+						doAnalysisBackward();
 						doAnalysisForward();
 					}
-					errs() << "Main block end" << '\n';
+					errs() << " main() function end" << "\n";
 				}
 				return false;
 			}
 
 			//function to initialize a new context
-			void initContext(Function *F, std::vector<bool> forwardEntryValue, std::vector<bool> backwardEntryValue)
+			void initContext(Function *F, std::vector<bool> forwardEntryValue, std::vector<bool> backwardEntryValue, bool dir)
 			{
-			    errs() << "initContext for context" << context << " and function " << F->getName() <<'\n';
+			    /*
+			        dir tells either forward initialization or backward
+			        1 => forward
+			        0 => backward
+			    */
+			    errs() << "initContext for contextID=" << context << " and function=" << F->getName() <<'\n';
                 inValues[std::make_pair(context, F)] = std::make_pair(forwardEntryValue, backwardEntryValue);
 				//registering into transition table
 				transitionTable[std::make_tuple(F, forwardEntryValue, backwardEntryValue)] = std::make_tuple(context, forwardTop, backwardTop);
@@ -104,8 +109,10 @@ namespace
 
 				Instruction* start = &(*F->begin()->begin());
 				Instruction* end = &(*std::get<1>(tempWorklist[tempWorklist.size()-1])->rbegin());
-				IN[std::make_tuple(context, F, start)].first = forwardEntryValue;
-				OUT[std::make_tuple(context, F, end)].second = backwardEntryValue;
+				if(dir)
+				    IN[std::make_tuple(context, F, start)].first = forwardEntryValue;
+				else
+				    OUT[std::make_tuple(context, F, end)].second = backwardEntryValue;
 				funcTolastIns[F] = end;
                 errs() << "initContext end" << '\n';
                 tempWorklist.clear();
@@ -158,12 +165,11 @@ namespace
 						//function call
 						if(currentIns->getOpcode() == 55)
 						{
-						    errs() << " Function call " << '\n';
 						    int numberOfArg = currentIns->operands().end() - currentIns->operands().begin() - 1;
 						    Function* calledFunction = cast<CallInst>(currentIns)->getCalledFunction();
 						    if(calledFunction->getName() == "_Z5checkv")
 						    {
-						        performChecking();  //checker code
+						        performChecking(currentFunction->getName());  //checker code
 						    }
 						    else
 						    {
@@ -176,7 +182,7 @@ namespace
                                 if(transitionTable.find(std::make_tuple(calledFunction, fIN, bIN)) == transitionTable.end())
                                 {
                                     newContext = ++context;
-                                    initContext(calledFunction, fIN, bIN);
+                                    initContext(calledFunction, fIN, bIN, 1);
                                 }
                                 else //exists
                                 {
@@ -194,7 +200,6 @@ namespace
 						}
 						else
 						{
-						    errs() << " normal ins call " << '\n';
 							OUT[std::make_tuple(contextId, currentFunction, currentIns)].first = forwardNormalFlowFunction(currentIns, currentFunction, contextId);
 						}
 						Instruction* lastIns = currentBlock->getTerminator();
@@ -280,7 +285,7 @@ namespace
 						    Function* calledFunction = cast<CallInst>(currentIns)->getCalledFunction();
 						    if(calledFunction->getName() == "_Z5checkv")
 						    {
-						        performChecking();  //checker code
+						        performChecking(currentFunction->getName());  //checker code
 						    }
 						    else
 						    {
@@ -293,7 +298,7 @@ namespace
                                 if(transitionTable.find(std::make_tuple(calledFunction, fOUT, bOUT)) == transitionTable.end())
                                 {
                                     newContext = ++context;
-                                    initContext(calledFunction, fOUT, bOUT);
+                                    initContext(calledFunction, fOUT, bOUT, 0);
                                 }
                                 else
                                 {
@@ -344,6 +349,7 @@ namespace
 					    }
 					}
 			    }
+
 			    errs() << "doAnalysisBackward end" << '\n';
 			}
 
@@ -380,16 +386,22 @@ namespace
 				return OUT[std::make_tuple(contextId, currentFunction, ins)].first;
 			}
 
-			void performChecking()
+			void performChecking(std::string fName)
 			{
-			    errs() << '\t' << "Check under progress" << '\n';
+			    errs() << "Check under progress for function = " << fName << '\n';
 			    errs() << "***********************************\n";
-			    errs() << "Context\tcallers\tcallee\n";
-			    for(auto i : transitionGraph)
-			        errs() << i.first << "-> " << i.second.first.size() << " -> " << i.second.second.size() << "\n";
-			    errs() << forwardWorklist.size() << '\n';
+			    errs () << "Size of backwardWorklist = " << backwardWorklist.size() << '\n';
+			    errs () << "Size of forwardWorklist = " << forwardWorklist.size() << '\n';
+			    for(auto callerContext : transitionGraph)
+			    {
+			        errs() << callerContext.first << " -> ( ";
+			        for(auto calledContext : callerContext.second.second)
+			            errs() << calledContext.second << " ";
+			        errs() << ")\n";
+			    }
 			    errs() << "***********************************\n";
 			}
+
 
 
 	};
