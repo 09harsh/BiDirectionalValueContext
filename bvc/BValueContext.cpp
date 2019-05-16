@@ -186,10 +186,10 @@ namespace
                                 }
 
                                 //setting up the edges of new context
-                                transitionGraph[context].first.push_back(std::make_tuple(currentFunction, currentBlock, contextId));
+                                transitionGraph[newContext].first.push_back(std::make_tuple(currentFunction, currentBlock, contextId));
 
                                 //setting up the edges of calling context
-                                transitionGraph[contextId].second[std::make_pair(currentBlock, currentIns)] = context;
+                                transitionGraph[contextId].second[std::make_pair(currentBlock, currentIns)] = newContext;
 						    }
 						}
 						else
@@ -266,6 +266,7 @@ namespace
 					for(auto insBB=currentBlock->rbegin();insBB!=currentBlock->rend();insBB++)
 					{
 					    Instruction* currentIns = &(*insBB);
+					    std::vector<bool> prevIN = IN[std::make_tuple(currentContext, currentFunction, currentIns)].second;
 					    if(insBB != currentBlock->rbegin())
 					    {
 					        auto tempIns = insBB;
@@ -288,13 +289,58 @@ namespace
                                 std::vector<bool> bOUT = OUT[std::make_tuple(currentContext, currentFunction, currentIns)].second;
 
                                 //does not exist
-
-
+                                int newContext;
+                                if(transitionTable.find(std::make_tuple(calledFunction, fOUT, bOUT)) == transitionTable.end())
+                                {
+                                    newContext = ++context;
+                                    initContext(calledFunction, fOUT, bOUT);
+                                }
+                                else
+                                {
+                                    newContext = std::get<0>(transitionTable[std::make_tuple(calledFunction, fOUT, bOUT)]);
+                                    std::vector<bool> inflow = std::get<1>(transitionTable[std::make_tuple(calledFunction, fOUT, bOUT)]);
+                                    IN[std::make_tuple(currentContext, calledFunction, currentIns)].second = backwardMerge(prevIN, inflow);
+                                }
+                                //setting up the context for new context
+                                transitionGraph[newContext].first.push_back(std::make_tuple(currentFunction, currentBlock, currentContext));
+                                //setting up the edges for calling context
+                                transitionGraph[currentContext].second[std::make_pair(currentBlock, currentIns)] = newContext;
 						    }
 					    }
 					    else
 					    {
 					        IN[std::make_tuple(currentContext, currentFunction, currentIns)].second = backwardNormalFunction(currentIns, currentFunction, currentContext);
+					    }
+
+					    Instruction* firstIns = &(*currentBlock->begin());
+					    std::vector<bool> newIN = IN[std::make_tuple(currentContext, currentFunction, currentIns)].second;
+					    //if in changes
+					    if(currentIns==firstIns and prevIN != newIN)
+					    {
+					        for(auto it = pred_begin(currentBlock), et = pred_end(currentBlock); it != et; ++it)
+					        {
+						        forwardWorklist.push_front(std::make_tuple(currentFunction, *it, currentContext));
+						        backwardWorklist.push_back(std::make_tuple(currentFunction, *it, currentContext));
+					        }
+					    }
+					}
+					//if next block is exit block
+					while(!backwardWorklist.empty() and std::get<1>(backwardWorklist.back()) == NULL)
+					{
+					    Function* function;
+					    int funcContext;
+					    std::tie(function, std::ignore, funcContext) = backwardWorklist.back();
+					    backwardWorklist.pop_back();
+					    std::vector<bool> fOUT = inValues[std::make_pair(funcContext, function)].first;
+					    std::vector<bool> bOUT = inValues[std::make_pair(funcContext, function)].second;
+					    Instruction* firstIns = &(*function->begin()->begin());
+					    //setting outflow
+					    std::get<1>(transitionTable[std::make_tuple(function, fOUT, bOUT)]) = IN[std::make_tuple(funcContext, function, firstIns)].first;
+					    std::get<2>(transitionTable[std::make_tuple(function, fOUT, bOUT)]) = IN[std::make_tuple(funcContext, function, firstIns)].second;
+					    for(auto callers : transitionGraph[funcContext].first)
+					    {
+					        forwardWorklist.push_front(callers);
+					        backwardWorklist.push_back(callers);
 					    }
 					}
 			    }
