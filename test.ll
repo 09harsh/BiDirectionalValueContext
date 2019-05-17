@@ -18,7 +18,22 @@ bb:
   store i32 %arg1, i32* %tmp2, align 4
   call void @_Z5checkv()
   %tmp3 = load i32, i32* %tmp, align 4
-  ret i32 %tmp3
+  %tmp4 = load i32, i32* %tmp2, align 4
+  %tmp5 = add nsw i32 %tmp3, %tmp4
+  store i32 %tmp5, i32* %tmp, align 4
+  %tmp6 = load i32, i32* %tmp, align 4
+  ret i32 %tmp6
+}
+
+; Function Attrs: noinline nounwind optnone uwtable
+define dso_local void @_Z8functionv() #0 {
+bb:
+  %tmp = alloca i32, align 4
+  %tmp1 = alloca i32, align 4
+  call void @_Z5checkv()
+  store i32 8, i32* %tmp, align 4
+  store i32 7, i32* %tmp1, align 4
+  ret void
 }
 
 ; Function Attrs: noinline norecurse nounwind optnone uwtable
@@ -49,56 +64,57 @@ bb:
   %tmp19 = load i32, i32* %tmp4, align 4
   %tmp20 = add nsw i32 %tmp18, %tmp19
   store i32 %tmp20, i32* %tmp1, align 4
-  %tmp21 = load i32, i32* %tmp5, align 4
-  %tmp22 = load i32, i32* %tmp6, align 4
-  %tmp23 = sub nsw i32 %tmp21, %tmp22
-  store i32 %tmp23, i32* %tmp2, align 4
-  %tmp24 = load i32, i32* %tmp4, align 4
+  %tmp21 = load i32, i32* %tmp1, align 4
+  %tmp22 = load i32, i32* %tmp2, align 4
+  %tmp23 = call i32 @_Z4funcii(i32 %tmp21, i32 %tmp22)
+  store i32 %tmp23, i32* %tmp3, align 4
+  %tmp24 = load i32, i32* %tmp5, align 4
   %tmp25 = load i32, i32* %tmp6, align 4
-  %tmp26 = mul nsw i32 %tmp24, %tmp25
-  %tmp27 = load i32, i32* %tmp5, align 4
-  %tmp28 = sdiv i32 %tmp26, %tmp27
-  store i32 %tmp28, i32* %tmp4, align 4
-  br label %bb29
-
-bb29:                                             ; preds = %bb32, %bb
+  %tmp26 = sub nsw i32 %tmp24, %tmp25
+  store i32 %tmp26, i32* %tmp2, align 4
+  %tmp27 = load i32, i32* %tmp4, align 4
+  %tmp28 = load i32, i32* %tmp6, align 4
+  %tmp29 = mul nsw i32 %tmp27, %tmp28
   %tmp30 = load i32, i32* %tmp5, align 4
-  %tmp31 = icmp sgt i32 %tmp30, 3
-  br i1 %tmp31, label %bb32, label %bb38
+  %tmp31 = sdiv i32 %tmp29, %tmp30
+  store i32 %tmp31, i32* %tmp4, align 4
+  br label %bb32
 
-bb32:                                             ; preds = %bb29
-  %tmp33 = load i32, i32* %tmp4, align 4
-  %tmp34 = load i32, i32* %tmp3, align 4
-  %tmp35 = mul nsw i32 %tmp33, %tmp34
-  %tmp36 = load i32, i32* %tmp2, align 4
-  %tmp37 = add nsw i32 %tmp35, %tmp36
-  store i32 %tmp37, i32* %tmp4, align 4
-  br label %bb29
+bb32:                                             ; preds = %bb35, %bb
+  %tmp33 = load i32, i32* %tmp5, align 4
+  %tmp34 = icmp sgt i32 %tmp33, 3
+  br i1 %tmp34, label %bb35, label %bb41
 
-bb38:                                             ; preds = %bb29
-  %tmp39 = load i32, i32* %tmp1, align 4
-  %tmp40 = icmp sgt i32 4, %tmp39
-  br i1 %tmp40, label %bb41, label %bb45
+bb35:                                             ; preds = %bb32
+  %tmp36 = load i32, i32* %tmp4, align 4
+  %tmp37 = load i32, i32* %tmp3, align 4
+  %tmp38 = mul nsw i32 %tmp36, %tmp37
+  %tmp39 = load i32, i32* %tmp2, align 4
+  %tmp40 = add nsw i32 %tmp38, %tmp39
+  store i32 %tmp40, i32* %tmp4, align 4
+  br label %bb32
 
-bb41:                                             ; preds = %bb38
+bb41:                                             ; preds = %bb32
+  call void @_Z8functionv()
   %tmp42 = load i32, i32* %tmp1, align 4
-  %tmp43 = load i32, i32* %tmp2, align 4
-  %tmp44 = mul nsw i32 %tmp42, %tmp43
-  store i32 %tmp44, i32* %tmp5, align 4
-  br label %bb49
+  %tmp43 = icmp sgt i32 4, %tmp42
+  br i1 %tmp43, label %bb44, label %bb48
 
-bb45:                                             ; preds = %bb38
-  %tmp46 = load i32, i32* %tmp3, align 4
-  %tmp47 = load i32, i32* %tmp6, align 4
-  %tmp48 = sub nsw i32 %tmp46, %tmp47
-  store i32 %tmp48, i32* %tmp6, align 4
-  br label %bb49
+bb44:                                             ; preds = %bb41
+  %tmp45 = load i32, i32* %tmp1, align 4
+  %tmp46 = load i32, i32* %tmp2, align 4
+  %tmp47 = mul nsw i32 %tmp45, %tmp46
+  store i32 %tmp47, i32* %tmp5, align 4
+  br label %bb52
 
-bb49:                                             ; preds = %bb45, %bb41
-  %tmp50 = load i32, i32* %tmp1, align 4
-  %tmp51 = load i32, i32* %tmp2, align 4
-  %tmp52 = call i32 @_Z4funcii(i32 %tmp50, i32 %tmp51)
-  store i32 %tmp52, i32* %tmp3, align 4
+bb48:                                             ; preds = %bb41
+  %tmp49 = load i32, i32* %tmp3, align 4
+  %tmp50 = load i32, i32* %tmp6, align 4
+  %tmp51 = sub nsw i32 %tmp49, %tmp50
+  store i32 %tmp51, i32* %tmp6, align 4
+  br label %bb52
+
+bb52:                                             ; preds = %bb48, %bb44
   %tmp53 = load i32, i32* %tmp3, align 4
   ret i32 %tmp53
 }

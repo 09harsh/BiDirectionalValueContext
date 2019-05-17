@@ -26,7 +26,7 @@ namespace
 	using forwardDataFlowValue = std::vector<bool>;
 	using backwardDataFlowValue = std::vector<bool>;
 	using callSite = BasicBlock*;
-	using callers = std::vector<std::tuple<Function*, callSite, contextId>>;
+	using callers = std::set<std::tuple<Function*, callSite, contextId>>;
 	using blockId = BasicBlock*;
 	using insId = Instruction*;
 	using callee = std::map<std::pair<callSite, insId>, contextId>;
@@ -35,7 +35,7 @@ namespace
 	static int context = 0;
 	std::map<std::tuple<Function*, forwardEntryValue, backwardEntryValue>, std::tuple<contextId, forwardExitValue, backwardExitValue>> transitionTable;
 	std::map<contextId, std::pair<callers, callee>> transitionGraph;
-	std::deque<std::tuple<Function*, blockId, contextId>> forwardWorklist, backwardWorklist;
+	std::deque<std::tuple<Function*, blockId, contextId, bool>> forwardWorklist, backwardWorklist;
 	std::vector<bool> forwardBI, backwardBI, forwardTop, forwardBottom, backwardTop, backwardBottom;
 	std::map<std::tuple<contextId, Function*, insId>, std::pair<forwardDataFlowValue, backwardDataFlowValue>> IN, OUT;
 	std::map<std::pair<contextId, Function*>, std::pair<forwardEntryValue, backwardEntryValue>> inValues;
@@ -57,8 +57,8 @@ namespace
 					
 					while(!forwardWorklist.empty() or !backwardWorklist.empty())
 					{
-						doAnalysisBackward();
 						doAnalysisForward();
+						doAnalysisBackward();
 					}
 					errs() << " main() function end" << "\n";
 				}
@@ -80,14 +80,18 @@ namespace
 				//updating transition graph
 				transitionGraph[context];
 
-				std::vector<std::tuple<Function*, BasicBlock*, int>> tempWorklist;
+				std::vector<std::tuple<Function*, BasicBlock*, int, bool>> tempWorklist;
 				BasicBlock* nullBlock = NULL;
-				backwardWorklist.push_back(std::make_tuple(F, nullBlock, context));
+				/*
+				    bool 1=> entry
+				    bool 0 => exit
+				*/
+				backwardWorklist.push_back(std::make_tuple(F, nullBlock, context, 0));
 				for(Function::iterator bb=F->begin(), e=F->end(); e!=bb;++bb)
 				{
 					BasicBlock *BB = &(*bb);
-					backwardWorklist.push_back(std::make_tuple(F, BB, context));
-					tempWorklist.push_back(std::make_tuple(F, BB, context));
+					backwardWorklist.push_back(std::make_tuple(F, BB, context, 1));
+					tempWorklist.push_back(std::make_tuple(F, BB, context, 1));
 					
 					//initializing IN and OUT with 'top' value
 					for(BasicBlock::iterator i=bb->begin(), e=bb->end(); i!=e; ++i)
@@ -97,15 +101,15 @@ namespace
 						OUT[std::make_tuple(context, F, I)] = std::make_pair(forwardTop, backwardTop);
 					}
 				}
-				backwardWorklist.push_back(std::make_tuple(F, nullBlock, context));
+				backwardWorklist.push_back(std::make_tuple(F, nullBlock, context, 1));
 
 				// filling forwardWorklist
-				forwardWorklist.push_front(std::make_tuple(F, nullBlock, context));
+				forwardWorklist.push_front(std::make_tuple(F, nullBlock, context, 0));
 				for(int i=tempWorklist.size()-1; i>=0; i--)
 				{
 					forwardWorklist.push_front(tempWorklist[i]);
 				}
-				forwardWorklist.push_front(std::make_tuple(F, nullBlock, context));
+				forwardWorklist.push_front(std::make_tuple(F, nullBlock, context,1));
 
 				Instruction* start = &(*F->begin()->begin());
 				Instruction* end = &(*std::get<1>(tempWorklist[tempWorklist.size()-1])->rbegin());
@@ -114,6 +118,10 @@ namespace
 				else
 				    OUT[std::make_tuple(context, F, end)].second = backwardEntryValue;
 				funcTolastIns[F] = end;
+				errs() << "\nPrinting forward" << '\n';
+				printWorklist(forwardWorklist);
+				errs() << "\nPrinting backward" << '\n';
+				printWorklist(backwardWorklist);
                 errs() << "initContext end" << '\n';
                 tempWorklist.clear();
 			}
@@ -128,13 +136,14 @@ namespace
 					int contextId;
 					Function* currentFunction;
 					BasicBlock* currentBlock;
-					std::tie(currentFunction, currentBlock, contextId) = forwardWorklist.front();
+					bool entry;
+					std::tie(currentFunction, currentBlock, contextId, entry) = forwardWorklist.front();
 					forwardWorklist.pop_front();
 
 					// an entry node 
-					if(currentBlock == NULL)
+					if(currentBlock==NULL and entry==true)
 					{
-						std::tie(currentFunction, currentBlock, contextId) = forwardWorklist.front();
+						std::tie(currentFunction, currentBlock, contextId, entry) = forwardWorklist.front();
 						forwardWorklist.pop_front();
 					}
 					else
@@ -191,11 +200,13 @@ namespace
                                     OUT[std::make_tuple(contextId, currentFunction, currentIns)].first = merge(prevOUT, outFlow);
                                 }
 
+
                                 //setting up the edges of new context
-                                transitionGraph[newContext].first.push_back(std::make_tuple(currentFunction, currentBlock, contextId));
+                                transitionGraph[newContext].first.insert(std::make_tuple(currentFunction, currentBlock, contextId));
 
                                 //setting up the edges of calling context
                                 transitionGraph[contextId].second[std::make_pair(currentBlock, currentIns)] = newContext;
+                                printTransitionGraph();
 						    }
 						}
 						else
@@ -208,15 +219,16 @@ namespace
 						//if OUT changes
 						if(currentIns==lastIns and prevOUT != newOUT)
 						{
+						    errs() << " OUT changes putting succ in forward and backward worklist" << '\n';
 						    for(BasicBlock* Succ : successors(currentBlock))
 						    {
-						        forwardWorklist.push_front(std::make_tuple(currentFunction, Succ, contextId));
-						        backwardWorklist.push_back(std::make_tuple(currentFunction, Succ, contextId));
+						        forwardWorklist.push_front(std::make_tuple(currentFunction, Succ, contextId, 1));
+						        backwardWorklist.push_back(std::make_tuple(currentFunction, Succ, contextId, 1));
 						    }
 						}
 					}
 					//if next block is return block
-					while(!forwardWorklist.empty() and std::get<1>(forwardWorklist.front()) == NULL)
+					while(!forwardWorklist.empty() and std::get<1>(forwardWorklist.front())==NULL and std::get<3>(forwardWorklist.front())==false)
 					{
 					    Function* function = std::get<0>(forwardWorklist.front());
 					    int funcContext = std::get<2>(forwardWorklist.front());
@@ -227,10 +239,19 @@ namespace
 					    //setting outflow
 					    std::get<1>(transitionTable[std::make_tuple(function,fIN, bIN)]) = OUT[std::make_tuple(funcContext, function, lastIns)].first;
 					    std::get<2>(transitionTable[std::make_tuple(function,fIN, bIN)]) = OUT[std::make_tuple(funcContext, function, lastIns)].second;
+					    errs() << " (forward) Leaving function " << function->getName() << " putting its callers in forward and backward worklist" << '\n';
 					    for(auto callers : transitionGraph[funcContext].first)
 					    {
-					        forwardWorklist.push_front(callers);
-					        backwardWorklist.push_back(callers);
+					        Function* function;
+					        BasicBlock* bb;
+					        int context;
+					        std::tie(function, bb, context) = callers;
+                            std::deque<std::tuple<Function*, BasicBlock*, int, bool>> tempWorklist;
+                            tempWorklist.push_back(std::make_tuple(function, bb, context, 1));
+					        forwardWorklist.push_front(std::make_tuple(function, bb, context, 1));
+					        backwardWorklist.push_back(std::make_tuple(function, bb, context, 1));
+					        printWorklist(tempWorklist);
+					        tempWorklist.clear();
 					    }
 
 					}
@@ -246,13 +267,14 @@ namespace
 			        int currentContext;
 			        Function* currentFunction;
 			        BasicBlock* currentBlock;
-			        std::tie(currentFunction, currentBlock, currentContext) = backwardWorklist.back();
+			        bool entry;
+			        std::tie(currentFunction, currentBlock, currentContext, entry) = backwardWorklist.back();
 					backwardWorklist.pop_back();
 
 					//if entry node
 					if(currentBlock == NULL)
 					{
-					    std::tie(currentFunction, currentBlock, currentContext) = backwardWorklist.back();
+					    std::tie(currentFunction, currentBlock, currentContext, entry) = backwardWorklist.back();
 					    backwardWorklist.pop_back();
 					}
 					else
@@ -307,9 +329,10 @@ namespace
                                     IN[std::make_tuple(currentContext, calledFunction, currentIns)].second = backwardMerge(prevIN, inflow);
                                 }
                                 //setting up the context for new context
-                                transitionGraph[newContext].first.push_back(std::make_tuple(currentFunction, currentBlock, currentContext));
+                                transitionGraph[newContext].first.insert(std::make_tuple(currentFunction, currentBlock, currentContext));
                                 //setting up the edges for calling context
                                 transitionGraph[currentContext].second[std::make_pair(currentBlock, currentIns)] = newContext;
+                                printTransitionGraph();
 						    }
 					    }
 					    else
@@ -322,19 +345,20 @@ namespace
 					    //if in changes
 					    if(currentIns==firstIns and prevIN != newIN)
 					    {
+					        errs() << " IN changes putting pred in forward and backward worklist" << '\n';
 					        for(auto it = pred_begin(currentBlock), et = pred_end(currentBlock); it != et; ++it)
 					        {
-						        forwardWorklist.push_front(std::make_tuple(currentFunction, *it, currentContext));
-						        backwardWorklist.push_back(std::make_tuple(currentFunction, *it, currentContext));
+						        forwardWorklist.push_front(std::make_tuple(currentFunction, *it, currentContext, 1));
+						        backwardWorklist.push_back(std::make_tuple(currentFunction, *it, currentContext, 1));
 					        }
 					    }
 					}
 					//if next block is exit block
-					while(!backwardWorklist.empty() and std::get<1>(backwardWorklist.back()) == NULL)
+					while(!backwardWorklist.empty() and std::get<1>(backwardWorklist.back())==NULL and std::get<3>(backwardWorklist.back())==false)
 					{
 					    Function* function;
 					    int funcContext;
-					    std::tie(function, std::ignore, funcContext) = backwardWorklist.back();
+					    std::tie(function, std::ignore, funcContext, std::ignore) = backwardWorklist.back();
 					    backwardWorklist.pop_back();
 					    std::vector<bool> fOUT = inValues[std::make_pair(funcContext, function)].first;
 					    std::vector<bool> bOUT = inValues[std::make_pair(funcContext, function)].second;
@@ -342,10 +366,19 @@ namespace
 					    //setting outflow
 					    std::get<1>(transitionTable[std::make_tuple(function, fOUT, bOUT)]) = IN[std::make_tuple(funcContext, function, firstIns)].first;
 					    std::get<2>(transitionTable[std::make_tuple(function, fOUT, bOUT)]) = IN[std::make_tuple(funcContext, function, firstIns)].second;
+                        errs() << " (backward) Leaving function " << function->getName() << " putting its callers in forward and backward worklist" << '\n';
 					    for(auto callers : transitionGraph[funcContext].first)
 					    {
-					        forwardWorklist.push_front(callers);
-					        backwardWorklist.push_back(callers);
+					        Function* function;
+					        BasicBlock* bb;
+					        int context;
+					        std::tie(function, bb, context) = callers;
+                            std::deque<std::tuple<Function*, BasicBlock*, int, bool>> tempWorklist;
+                            tempWorklist.push_back(std::make_tuple(function, bb, context, 0));
+					        forwardWorklist.push_front(std::make_tuple(function, bb, context, 0));
+					        backwardWorklist.push_back(std::make_tuple(function, bb, context, 0));
+					        printWorklist(tempWorklist);
+					        tempWorklist.clear();
 					    }
 					}
 			    }
@@ -388,10 +421,14 @@ namespace
 
 			void performChecking(std::string fName)
 			{
-			    errs() << "Check under progress for function = " << fName << '\n';
+			    errs() << "\nCheck under progress for function = " << fName << '\n';
 			    errs() << "***********************************\n";
-			    errs () << "Size of backwardWorklist = " << backwardWorklist.size() << '\n';
+			    errs() << " \nPrinting forwardWorklist : " << '\n';
+			    printWorklist(forwardWorklist);
 			    errs () << "Size of forwardWorklist = " << forwardWorklist.size() << '\n';
+			    errs() << " \nPrinting backwardWorklist : " << '\n';
+			    printWorklist(backwardWorklist);
+			    errs () << "Size of backwardWorklist = " << backwardWorklist.size() << '\n';
 			    for(auto callerContext : transitionGraph)
 			    {
 			        errs() << callerContext.first << " -> ( ";
@@ -402,7 +439,45 @@ namespace
 			    errs() << "***********************************\n";
 			}
 
+            void printWorklist(std::deque<std::tuple<Function*, BasicBlock*, int, bool>> worklist)
+            {
+                for(auto w : worklist)
+                {
+                    Function* wFunction;
+                    BasicBlock* wBB;
+                    int wContext;
+                    bool entry;
+                    std::tie(wFunction, wBB, wContext, entry) = w;
+                    if(wBB != NULL)
+                        errs() << wFunction->getName() << " " << wBB->getName() << " " << wContext << " " << entry << '\n';
+                    else
+                        errs() << wFunction->getName() << " " << "NULL" << " " << wContext << " " << entry << '\n';
+                }
+            }
 
+            void printTransitionGraph()
+            {
+                for(auto context : transitionGraph)
+                {
+                    errs() << context.first << " : \n";
+                    errs() << "Callers : ( ";
+                    for(auto callers : context.second.first)
+                    {
+                        errs() << std::get<2>(callers) << " ";
+                    }
+                    errs() << ")\nCallee : ( ";
+                    for(auto callee : context.second.second)
+                    {
+                        errs() << callee.second << " ";
+                    }
+                    errs() <<")\n";
+                }
+            }
+
+            void printINandOUT()
+            {
+
+            }
 
 	};
 }//end namespace
