@@ -20,6 +20,8 @@ int main(){
 	int a,b,c,d,e,f;
 	a = a+b-c*d/e%f;
 	a = b+d;
+	if(a>b)
+	    a=c;
 	c = func(a,b);
 	b = e-f;
 	d = d*f/e;

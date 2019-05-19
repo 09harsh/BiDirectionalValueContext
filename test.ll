@@ -66,57 +66,68 @@ bb:
   store i32 %tmp20, i32* %tmp1, align 4
   %tmp21 = load i32, i32* %tmp1, align 4
   %tmp22 = load i32, i32* %tmp2, align 4
-  %tmp23 = call i32 @_Z4funcii(i32 %tmp21, i32 %tmp22)
-  store i32 %tmp23, i32* %tmp3, align 4
-  %tmp24 = load i32, i32* %tmp5, align 4
-  %tmp25 = load i32, i32* %tmp6, align 4
-  %tmp26 = sub nsw i32 %tmp24, %tmp25
-  store i32 %tmp26, i32* %tmp2, align 4
-  %tmp27 = load i32, i32* %tmp4, align 4
-  %tmp28 = load i32, i32* %tmp6, align 4
-  %tmp29 = mul nsw i32 %tmp27, %tmp28
+  %tmp23 = icmp sgt i32 %tmp21, %tmp22
+  br i1 %tmp23, label %bb24, label %bb26
+
+bb24:                                             ; preds = %bb
+  %tmp25 = load i32, i32* %tmp3, align 4
+  store i32 %tmp25, i32* %tmp1, align 4
+  br label %bb26
+
+bb26:                                             ; preds = %bb24, %bb
+  %tmp27 = load i32, i32* %tmp1, align 4
+  %tmp28 = load i32, i32* %tmp2, align 4
+  %tmp29 = call i32 @_Z4funcii(i32 %tmp27, i32 %tmp28)
+  store i32 %tmp29, i32* %tmp3, align 4
   %tmp30 = load i32, i32* %tmp5, align 4
-  %tmp31 = sdiv i32 %tmp29, %tmp30
-  store i32 %tmp31, i32* %tmp4, align 4
-  br label %bb32
+  %tmp31 = load i32, i32* %tmp6, align 4
+  %tmp32 = sub nsw i32 %tmp30, %tmp31
+  store i32 %tmp32, i32* %tmp2, align 4
+  %tmp33 = load i32, i32* %tmp4, align 4
+  %tmp34 = load i32, i32* %tmp6, align 4
+  %tmp35 = mul nsw i32 %tmp33, %tmp34
+  %tmp36 = load i32, i32* %tmp5, align 4
+  %tmp37 = sdiv i32 %tmp35, %tmp36
+  store i32 %tmp37, i32* %tmp4, align 4
+  br label %bb38
 
-bb32:                                             ; preds = %bb35, %bb
-  %tmp33 = load i32, i32* %tmp5, align 4
-  %tmp34 = icmp sgt i32 %tmp33, 3
-  br i1 %tmp34, label %bb35, label %bb41
+bb38:                                             ; preds = %bb41, %bb26
+  %tmp39 = load i32, i32* %tmp5, align 4
+  %tmp40 = icmp sgt i32 %tmp39, 3
+  br i1 %tmp40, label %bb41, label %bb47
 
-bb35:                                             ; preds = %bb32
-  %tmp36 = load i32, i32* %tmp4, align 4
-  %tmp37 = load i32, i32* %tmp3, align 4
-  %tmp38 = mul nsw i32 %tmp36, %tmp37
-  %tmp39 = load i32, i32* %tmp2, align 4
-  %tmp40 = add nsw i32 %tmp38, %tmp39
-  store i32 %tmp40, i32* %tmp4, align 4
-  br label %bb32
+bb41:                                             ; preds = %bb38
+  %tmp42 = load i32, i32* %tmp4, align 4
+  %tmp43 = load i32, i32* %tmp3, align 4
+  %tmp44 = mul nsw i32 %tmp42, %tmp43
+  %tmp45 = load i32, i32* %tmp2, align 4
+  %tmp46 = add nsw i32 %tmp44, %tmp45
+  store i32 %tmp46, i32* %tmp4, align 4
+  br label %bb38
 
-bb41:                                             ; preds = %bb32
+bb47:                                             ; preds = %bb38
   call void @_Z8functionv()
-  %tmp42 = load i32, i32* %tmp1, align 4
-  %tmp43 = icmp sgt i32 4, %tmp42
-  br i1 %tmp43, label %bb44, label %bb48
+  %tmp48 = load i32, i32* %tmp1, align 4
+  %tmp49 = icmp sgt i32 4, %tmp48
+  br i1 %tmp49, label %bb50, label %bb54
 
-bb44:                                             ; preds = %bb41
-  %tmp45 = load i32, i32* %tmp1, align 4
-  %tmp46 = load i32, i32* %tmp2, align 4
-  %tmp47 = mul nsw i32 %tmp45, %tmp46
-  store i32 %tmp47, i32* %tmp5, align 4
-  br label %bb52
+bb50:                                             ; preds = %bb47
+  %tmp51 = load i32, i32* %tmp1, align 4
+  %tmp52 = load i32, i32* %tmp2, align 4
+  %tmp53 = mul nsw i32 %tmp51, %tmp52
+  store i32 %tmp53, i32* %tmp5, align 4
+  br label %bb58
 
-bb48:                                             ; preds = %bb41
-  %tmp49 = load i32, i32* %tmp3, align 4
-  %tmp50 = load i32, i32* %tmp6, align 4
-  %tmp51 = sub nsw i32 %tmp49, %tmp50
-  store i32 %tmp51, i32* %tmp6, align 4
-  br label %bb52
+bb54:                                             ; preds = %bb47
+  %tmp55 = load i32, i32* %tmp3, align 4
+  %tmp56 = load i32, i32* %tmp6, align 4
+  %tmp57 = sub nsw i32 %tmp55, %tmp56
+  store i32 %tmp57, i32* %tmp6, align 4
+  br label %bb58
 
-bb52:                                             ; preds = %bb48, %bb44
-  %tmp53 = load i32, i32* %tmp3, align 4
-  ret i32 %tmp53
+bb58:                                             ; preds = %bb54, %bb50
+  %tmp59 = load i32, i32* %tmp3, align 4
+  ret i32 %tmp59
 }
 
 attributes #0 = { noinline nounwind optnone uwtable "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "less-precise-fpmad"="false" "min-legal-vector-width"="0" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+fxsr,+mmx,+sse,+sse2,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
