@@ -1,43 +1,19 @@
 #include "myHeader.h"
 
-int func(int x, int y)
-{
-	check();
-	x = x + y;
-	return x;
-}
+int *a,b, *c, *d;
 
-void function()
+
+void func(int b)
 {
-    check();
-    int a,b;
-    a = 8;
-    b = 7;
+    isLive(a);
+    c = d;
 }
 
 int main(){
-	check();
-	int a,b,c,d,e,f;
-	a = a+b-c*d/e%f;
-	a = b+d;
-	if(a>b)
-	    a=c;
-	c = func(a,b);
-	b = e-f;
-	d = d*f/e;
-	while(e>3)
-	{
-		d = d*c+b;
-	}
-	function();
-	if(4>a)
-	{
-		e = a*b;
-	}
-	else
-	{
-		f = c-f;
-	}
-
-	return c;
+    a = d;
+    func(b);
+    isLive(c);
+    d = a;
+    func(*c);
+	return *c;
 }
