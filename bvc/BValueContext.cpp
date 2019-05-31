@@ -14,6 +14,9 @@
 #include <vector>
 #include <utility>
 #include <bits/stdc++.h>
+#include <memory>
+#include <string>
+#include <cxxabi.h>
 #include "lhsRhsPass.cpp"
 namespace
 {
@@ -48,6 +51,7 @@ namespace
         std::map<std::pair<contextId, Function*>, std::pair<forwardEntryValue, backwardEntryValue>> inValues;
         std::map<Function*, std::pair<Instruction*, BasicBlock*>> funcTolastIB;
         std::set<std::tuple<int, Function*, Instruction*>> liveTests;
+        std::set<std::tuple<int, Function*, Instruction*>> pointsToTests;
 
     public:
         void initContext(Function*, std::map<Value*, std::set<Value*>>, std::set<Value*>);
@@ -61,13 +65,20 @@ namespace
         std::set<Value*> backwardLocalFlowFunction(Instruction*, Function*, int);
         void printWorklist(std::deque<std::tuple<Function*, BasicBlock*, int>>);
         void printTransitionGraph();
+        void printTransitionTable();
         void printINandOUT();
+        void printForwardINandOUT();
         void run(Function*);
         void livenessTestResult();
+        void pointsToTestResult();
         std::set<Value*> inInserter(std::set<Value*>, std::vector<std::pair<Value*, int>>, std::map<Value*, std::set<Value*>>);
+        std::string demangle(const char*);
+        std::string getOriginalName(Function*);
+        void removeExtraPointerInfo();
     };
     LFCPA lfcpaObj;
     static int context = 0;
+
 
 //-------------------- function to initialise context --------------//
     void LFCPA::initContext(Function *F, std::map<Value*, std::set<Value*>> forwardEntryValue, std::set<Value*> backwardEntryValue)
@@ -157,12 +168,14 @@ namespace
                 {
                     int numberOfArg = currentIns->operands().end() - currentIns->operands().begin() - 1;
                     Function* calledFunction = cast<CallInst>(currentIns)->getCalledFunction();
-                    if(calledFunction->getName() == "_Z6isLiveIPiEvRT_")
+                    std::string originalName = getOriginalName(calledFunction);
+                    if(originalName == "isLive")
                     {
                         OUT[std::make_tuple(contextId, currentFunction, currentIns)].first = IN[std::make_tuple(contextId, currentFunction, currentIns)].first;
                     }
-                    else if(calledFunction->getName() == "_Z12isPointingToIPiS0_EvRT_RT0_")
+                    else if(originalName == "isPointingTo")
                     {
+                        pointsToTests.insert(std::make_tuple(contextId, currentFunction, currentIns));
                         OUT[std::make_tuple(contextId, currentFunction, currentIns)].first = IN[std::make_tuple(contextId, currentFunction, currentIns)].first;
                     }
                     else
@@ -290,12 +303,13 @@ namespace
 //					        errs() <<"\n--------------";
                     int numberOfArg = currentIns->operands().end() - currentIns->operands().begin() - 1;
                     Function* calledFunction = cast<CallInst>(currentIns)->getCalledFunction();
-                    if(calledFunction->getName() == "_Z6isLiveIPiEvRT_")
+                    std::string originalName = getOriginalName(calledFunction);
+                    if(originalName == "isLive")
                     {
                         liveTests.insert(std::make_tuple(currentContext, currentFunction, currentIns));
                         IN[std::make_tuple(currentContext, currentFunction, currentIns)].second = OUT[std::make_tuple(currentContext, currentFunction, currentIns)].second;
                     }
-                    else if(calledFunction->getName() == "_Z12isPointingToIPiS0_EvRT_RT0_")
+                    else if(originalName == "isPointingTo")
                     {
                         IN[std::make_tuple(currentContext, currentFunction, currentIns)].second = OUT[std::make_tuple(currentContext, currentFunction, currentIns)].second;
                     }
@@ -405,15 +419,91 @@ namespace
             Compute GEN, KILL
             and return OUT = (IN - KILL) U GEN;
         */
-        return OUT[std::make_tuple(contextId, function, ins)].first;
+        std::map<Value*, std::set<Value*>> INofInst, OUTofInst;
+        INofInst = IN[std::make_tuple(contextId, function, ins)].first;
+        OUTofInst = INofInst;
+        std::set<Value*> backwardOUT = OUT[std::make_tuple(contextId, function, ins)].second;
+        if(isa<StoreInst>(ins) and getRHS(ins).size()==1)
+        {
+            std::pair<Value*, int> LHS = getLHS(ins);
+            std::pair<Value*, int> RHS = getRHS(ins)[0];
+            std::set<Value*> rhsSet;
+            //getting rhs part
+            int rhsIndir = RHS.second;
+            Value* rhsValue = RHS.first;
+            if(rhsIndir == -1)
+            {
+                rhsSet.insert(rhsValue);
+            }
+            else
+            {
+                std::queue<Value*> q;
+                Value* nullValue = NULL;
+                q.push(rhsValue);
+                q.push(nullValue);
+                while(rhsIndir>=0 and !q.empty())
+                {
+                    Value* rhsTemp = q.front();
+                    q.pop();
+                    if(rhsTemp == nullValue)
+                    {
+                        q.push(nullValue);
+                        rhsIndir--;
+                    }
+                    else if(rhsTemp->getType()->getContainedType(0)->isPointerTy())
+                    {
+                        for(auto pointees : INofInst[rhsTemp])
+                            q.push(pointees);
+                    }
+                }
+                while(!q.empty())
+                {
+                    Value* rhsValue = q.front();
+                    q.pop();
+                    if(rhsValue != nullValue)
+                        rhsSet.insert(rhsValue);
+                }
+            }
+            //setting lhs
+            int lhsIndir = LHS.second;
+            std::queue<Value*> q;
+            Value* nullValue = NULL;
+            q.push(LHS.first);
+            q.push(nullValue);
+            while(lhsIndir>0 and !q.empty())
+            {
+                Value* lhsTemp = q.front();
+                q.pop();
+                if(lhsTemp == nullValue)
+                {
+                    q.push(nullValue);
+                    lhsIndir--;
+                }
+                else if(lhsTemp->getType()->getContainedType(0)->isPointerTy())
+                {
+                    for(auto pointees : INofInst[lhsTemp])
+                        q.push(pointees);
+                }
+            }
+            while(!q.empty())
+            {
+                Value* lhsValue = q.front();
+                q.pop();
+                if(lhsValue!=nullValue )
+                {
+                    OUTofInst[lhsValue] = rhsSet;
+                }
+            }
+        }
+        return OUTofInst;
     }
 
     std::map<Value*, std::set<Value*>> LFCPA::merge(std::map<Value*, std::set<Value*>> a1, std::map<Value*, std::set<Value*>> a2)
     {
         for(auto it : a2)
         {
-            Value* key = a2.first;
-            std::set<Value*> value = a2.second;
+            Value* key = it.first;
+            std::set<Value*> value = it.second;
             for(auto itValues : value)
             {
                 a1[key].insert(itValues);
@@ -539,8 +629,13 @@ namespace
         }
 //        printTransitionGraph();
 //        printINandOUT();
-        livenessTestResult();
+
+//        printTransitionTable();
+//        printForwardINandOUT();
 //        errs() << " main() function end" << "\n";
+        removeExtraPointerInfo();
+        pointsToTestResult();
+        livenessTestResult();
     }
 
 
@@ -563,6 +658,40 @@ namespace
             errs() << "\n OUT : ";
             for(auto inIt : OUT[std::make_tuple(contextId, function, ins)].second)
                 errs() << inIt->getName() << ", ";
+            errs() << "\n";
+        }
+    }
+
+    void LFCPA::printForwardINandOUT()
+    {
+        for(auto InOutIt : IN)
+        {
+            int contextId;
+            Function* function;
+            Instruction* ins;
+            errs() << "-----------------------------------------\n";
+            std::tie(contextId, function, ins) = InOutIt.first;
+            errs() << "( " << contextId << ", "
+                   << function->getName() << ", ";
+            ins->print(errs());
+            errs() << " )\n In : ";
+            for(auto inIt : IN[std::make_tuple(contextId, function, ins)].first)
+            {
+                errs() <<"{ ";
+                errs() << inIt.first->getName() << "->(";
+                for(auto it : inIt.second)
+                    errs() << it->getName() << ", ";
+                errs() <<" }";
+            }
+            errs() << "\n OUT : ";
+            for(auto inIt : OUT[std::make_tuple(contextId, function, ins)].first)
+            {
+                errs() <<"{ ";
+                errs() << inIt.first->getName() << "->(";
+                for(auto it : inIt.second)
+                    errs() << it->getName() << ", ";
+                errs() <<" }";
+            }
             errs() << "\n";
         }
     }
@@ -601,8 +730,54 @@ namespace
         }
     }
 
+    void LFCPA::printTransitionTable()
+    {
+        errs() << "\n\t#----------------- Transition Table -----------------#\n";
+        for(auto it : transitionTable)
+        {
+            Function* func;
+            std::map<Value*, std::set<Value*>> fEntry, fExit;
+            std::set<Value*> bEntry, bExit;
+            int context;
+            std::tie(func, fEntry, bEntry) = it.first;
+            std::tie(context, fExit, bExit) = it.second;
+            errs() << "\t\tfunctionName\t: " << getOriginalName(func) << "\n";
+            errs() << "\t\tbackwardEntry\t: ";
+            for(auto bEntryValues : bEntry)
+                errs() << bEntryValues->getName() << ", ";
+            errs() << "\n";
+            errs() << "\t\tbackwardExit\t: ";
+            for(auto bEntryValues : bExit)
+                errs() << bEntryValues->getName() << ", ";
+            errs() << "\n\t\tforwardEntry\t: ";
+            for(auto fEntryValue : fEntry)
+            {
+                Value* key = fEntryValue.first;
+                std::set<Value*> value = fEntryValue.second;
+                errs() << key->getName() << "-> (";
+                for(auto itValue : value)
+                    errs() << itValue->getName() << ", ";
+                errs() << "), ";
+            }
+            errs() << "\n\t\tforwardExit\t: ";
+            for(auto fEntryValue : fExit)
+            {
+                Value* key = fEntryValue.first;
+                std::set<Value*> value = fEntryValue.second;
+                errs() << key->getName() << "-> (";
+                for(auto itValue : value)
+                    errs() << itValue->getName() << ", ";
+                errs() << "), ";
+            }
+            errs() << "\n";
+            errs() << "\t*************************************************\n";
 
-//-------------------- insertes value of type *x --------------//
+        }
+        errs() << "\t#-----------------------------------------------#\n";
+    }
+
+
+//-------------------- other utility functions --------------//
     std::set<Value*> LFCPA:: inInserter(std::set<Value*> currentIN, std::vector<std::pair<Value*, int>> list, std::map<Value*, std::set<Value*>> forwardOUT)
     {
         std::set<Value*> INofInst = currentIN;
@@ -633,6 +808,55 @@ namespace
         return INofInst;
     }
 
+    inline std::string LFCPA::demangle(const char* name)
+    {
+        int status = -1;
+
+        std::unique_ptr<char, void(*)(void*)> res { abi::__cxa_demangle(name, NULL, NULL, &status), std::free };
+        return (status == 0) ? res.get() : std::string(name);
+}
+
+    std::string LFCPA::getOriginalName(Function* calledFunction)
+    {
+        std::string s1 = demangle(calledFunction->getName().str().c_str());
+        size_t found = s1.find('<');
+        size_t found1 = s1.find(' ');
+        if(found!=std::string::npos and found1!=std::string::npos)
+            s1 = std::string(s1.begin()+found1+1, s1.begin()+found);
+        return s1;
+    }
+
+    void LFCPA::removeExtraPointerInfo()
+    {
+        for(auto it : IN)
+        {
+            std::set<Value*> bIN, bOUT;
+            std::map<Value*, std::set<Value*>> fIN, fOUT;
+            fIN = it.second.first;
+            fOUT = OUT[it.first].first;
+            bIN = it.second.second;
+            bOUT = OUT[it.first].second;
+            //setting IN
+            for(auto fINIt : fIN)
+            {
+                Value* key = fINIt.first;
+                if(bIN.count(key) == 0)
+                    IN[it.first].first.erase(key);
+            }
+//            //setting OUT
+            for(auto fOUTIt : fOUT)
+            {
+                Value* key = fOUTIt.first;
+                if(bOUT.count(key) == 0)
+                    OUT[it.first].first.erase(key);
+            }
+//            for(auto fOUTIt : fOUT)
+//            {
+//                if(!bOUT.count(fOUTIt.first))
+//                    fOUT.erase(fOUTIt.first);
+//            }
+        }
+    }
 
 //-------------------- testing functions ---------------------//
     void LFCPA::livenessTestResult()
@@ -648,6 +872,30 @@ namespace
             std::tie(context, func, ins) = testCases;
             result = IN[testCases].second.count(ins->getOperand(0));
             errs() <<"\t\ttest#"<<testNumber<<" ( " << func->getName() <<", " << context << ", " <<ins->getOperand(0)->getName() <<" ) : ";
+            if(result)
+                errs() << "passed ";
+            else
+                errs() << "failed ";
+//            ins->print(errs());
+            errs() << "\n";
+            testNumber++;
+        }
+        errs() <<"\t#-----------------------------------------------------------#\n";
+    }
+
+    void LFCPA::pointsToTestResult()
+    {
+        errs() <<"\n\t#-------------------- PointsTo Test ------------------------#\n\t\n";
+        int testNumber = 0;
+        bool result;
+        for(auto testCases : pointsToTests)
+        {
+            int context;
+            Function* func;
+            Instruction* ins;
+            std::tie(context, func, ins) = testCases;
+            result = OUT[testCases].first[ins->getOperand(0)].count(ins->getOperand(1));
+            errs() <<"\t\ttest#"<<testNumber<<" ( " << func->getName() <<", " << context << ", " <<ins->getOperand(0)->getName() <<"->" << ins->getOperand(1)->getName() <<" ) : ";
             if(result)
                 errs() << "passed ";
             else
