@@ -83,7 +83,6 @@ namespace
 //-------------------- function to initialise context --------------//
     void LFCPA::initContext(Function *F, std::map<Value*, std::set<Value*>> forwardEntryValue, std::set<Value*> backwardEntryValue)
     {
-//        errs() << "initContext for contextID=" << context << " and function=" << F->getName() <<'\n';
         inValues[std::make_pair(context, F)] = std::make_pair(forwardEntryValue, backwardEntryValue);
         //registering into transition table
         transitionTable[std::make_tuple(F, forwardEntryValue, backwardEntryValue)] = std::make_tuple(context, forwardTop, backwardTop);

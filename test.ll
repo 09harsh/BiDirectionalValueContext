@@ -30,28 +30,30 @@ bb:
   call void @_Z6isLiveIPPiEvRT_(i32*** dereferenceable(8) @z)
   %tmp1 = load i32, i32* @w, align 4
   %tmp2 = icmp ne i32 %tmp1, 0
-  br i1 %tmp2, label %bb3, label %bb6
+  br i1 %tmp2, label %bb3, label %bb8
 
 bb3:                                              ; preds = %bb
   call void @_Z12isPointingToIPPiS0_EvRT_RT0_(i32*** dereferenceable(8) @y, i32** dereferenceable(8) @v)
   call void @_Z12isPointingToIPPiS0_EvRT_RT0_(i32*** dereferenceable(8) @z, i32** dereferenceable(8) @u)
   %tmp4 = load i32*, i32** @x, align 8
-  %tmp5 = load i32**, i32*** @z, align 8
-  store i32* %tmp4, i32** %tmp5, align 8
-  br label %bb8
+  %tmp5 = load i32, i32* %tmp4, align 4
+  %tmp6 = load i32**, i32*** @z, align 8
+  %tmp7 = load i32*, i32** %tmp6, align 8
+  store i32 %tmp5, i32* %tmp7, align 4
+  br label %bb10
 
-bb6:                                              ; preds = %bb
-  %tmp7 = load i32**, i32*** @y, align 8
-  store i32** %tmp7, i32*** @z, align 8
-  br label %bb8
+bb8:                                              ; preds = %bb
+  %tmp9 = load i32**, i32*** @y, align 8
+  store i32** %tmp9, i32*** @z, align 8
+  br label %bb10
 
-bb8:                                              ; preds = %bb6, %bb3
+bb10:                                             ; preds = %bb8, %bb3
   call void @_Z12isPointingToIPPiS0_EvRT_RT0_(i32*** dereferenceable(8) @z, i32** dereferenceable(8) @u)
   call void @_Z12isPointingToIPiiEvRT_RT0_(i32** dereferenceable(8) @u, i32* dereferenceable(4) @w)
   call void @_Z6isLiveIPiEvRT_(i32** dereferenceable(8) @u)
-  %tmp9 = load i32*, i32** @u, align 8
-  %tmp10 = load i32, i32* %tmp9, align 4
-  ret i32 %tmp10
+  %tmp11 = load i32*, i32** @u, align 8
+  %tmp12 = load i32, i32* %tmp11, align 4
+  ret i32 %tmp12
 }
 
 ; Function Attrs: noinline nounwind optnone uwtable

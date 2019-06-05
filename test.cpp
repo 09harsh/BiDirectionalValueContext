@@ -12,7 +12,7 @@ int main(){
     {
         isPointingTo(y,v);
         isPointingTo(z,u);
-        *z = x;
+        **z = *x;
     }
     else
     {
