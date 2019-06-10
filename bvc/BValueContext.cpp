@@ -327,15 +327,10 @@ namespace
                         }
                         else
                         {
-//                            errs() << currentFunction->getName() << " " << calledFunction->getName() <<" old\n";
+
                             newContext = std::get<0>(transitionTable[std::make_tuple(calledFunction, fIN, bOUT)]);
                             std::set<Value*> inflow = std::get<2>(transitionTable[std::make_tuple(calledFunction, fIN, bOUT)]);
-//                                    std::set<Value*> tempAns;
-//                                    set_intersection(prevIN.begin(), prevIN.end(), inflow.begin(), inflow.end(), inserter(tempAns, tempAns.begin()));
-//                                    IN[std::make_tuple(currentContext, calledFunction, currentIns)].second = inflow;
-                            for(auto inflowValues : inflow)
-                                IN[std::make_tuple(currentContext, currentFunction, currentIns)].second.insert(inflowValues);
-
+                            IN[std::make_tuple(currentContext, currentFunction, currentIns)].second = backwardMerge(prevIN, inflow);
                         }
                         //setting localFlowFunction
                         IN[std::make_tuple(currentContext, currentFunction, currentIns)].second = backwardLocalFlowFunction(currentIns, currentFunction, currentContext);
@@ -370,11 +365,12 @@ namespace
                     //if current block is exit block
                     if(currentBlock == &(*currentFunction->begin()))
                     {
+
                         std::map<Value*, std::set<Value*>> fIN = inValues[std::make_pair(currentContext, currentFunction)].first;
                         std::set<Value*> bOUT = inValues[std::make_pair(currentContext, currentFunction)].second;
-                        std::set<Value*> oldOutflow = std::get<2>(transitionTable[std::make_tuple(currentFunction, fIN, bOUT)]);
+                        std::set<Value*> oldInflow = std::get<2>(transitionTable[std::make_tuple(currentFunction, fIN, bOUT)]);
 
-                        if(oldOutflow != newIN)
+                        if(oldInflow != newIN)
                         {
                             //setting outflow
                             std::get<2>(transitionTable[std::make_tuple(currentFunction, fIN, bOUT)]) = newIN;
@@ -729,6 +725,7 @@ namespace
             std::tie(func, fEntry, bEntry) = it.first;
             std::tie(context, fExit, bExit) = it.second;
             errs() << "\t\tfunctionName\t: " << getOriginalName(func) << "\n";
+            errs() << "\t\tcontext\t: " << context << "\n";
             errs() << "\t\tbackwardEntry\t: ";
             for(auto bEntryValues : bEntry)
                 errs() << bEntryValues->getName() << ", ";
@@ -869,50 +866,56 @@ namespace
 //-------------------- testing functions ---------------------//
     void LFCPA::livenessTestResult()
     {
-        errs() <<"\n\t#-------------------- Liveness Test ------------------------#\n\t\n";
-        int testNumber = 0;
-        bool result;
-        for(auto testCases : liveTests)
+        if(liveTests.size() > 0)
         {
-            int context;
-            Function* func;
-            Instruction* ins;
-            std::tie(context, func, ins) = testCases;
-            result = IN[testCases].second.count(ins->getOperand(0));
-            errs() <<"\t\ttest#"<<testNumber<<" ( " << func->getName() <<", " << context << ", " <<ins->getOperand(0)->getName() <<" ) : ";
-            if(result)
-                errs() << "passed ";
-            else
-                errs() << "failed ";
-//            ins->print(errs());
-            errs() << "\n";
-            testNumber++;
+            errs() <<"\n\t#-------------------- Liveness Test ------------------------#\n\t\n";
+            int testNumber = 0;
+            bool result;
+            for(auto testCases : liveTests)
+            {
+                int context;
+                Function* func;
+                Instruction* ins;
+                std::tie(context, func, ins) = testCases;
+                result = IN[testCases].second.count(ins->getOperand(0));
+                errs() <<"\t\ttest#"<<testNumber<<" ( " << func->getName() <<", " << context << ", " <<ins->getOperand(0)->getName() <<" ) : ";
+                if(result)
+                    errs() << "passed ";
+                else
+                    errs() << "failed ";
+    //            ins->print(errs());
+                errs() << "\n";
+                testNumber++;
+            }
+            errs() <<"\t#-----------------------------------------------------------#\n";
         }
-        errs() <<"\t#-----------------------------------------------------------#\n";
     }
 
     void LFCPA::pointsToTestResult()
     {
-        errs() <<"\n\t#-------------------- PointsTo Test ------------------------#\n\t\n";
-        int testNumber = 0;
-        bool result;
-        for(auto testCases : pointsToTests)
+        if(pointsToTests.size() > 0)
         {
-            int context;
-            Function* func;
-            Instruction* ins;
-            std::tie(context, func, ins) = testCases;
-            result = OUT[testCases].first[ins->getOperand(0)].count(ins->getOperand(1));
-            errs() <<"\t\ttest#"<<testNumber<<" ( " << func->getName() <<", " << context << ", " <<ins->getOperand(0)->getName() <<"->" << ins->getOperand(1)->getName() <<" ) : ";
-            if(result)
-                errs() << "passed ";
-            else
-                errs() << "failed ";
-//            ins->print(errs());
-            errs() << "\n";
-            testNumber++;
+            errs() <<"\n\t#-------------------- PointsTo Test ------------------------#\n\t\n";
+            int testNumber = 0;
+            bool result;
+            for(auto testCases : pointsToTests)
+            {
+                int context;
+                Function* func;
+                Instruction* ins;
+                std::tie(context, func, ins) = testCases;
+                result = OUT[testCases].first[ins->getOperand(0)].count(ins->getOperand(1));
+                errs() <<"\t\ttest#"<<testNumber<<" ( " << func->getName() <<", " << context << ", " <<ins->getOperand(0)->getName() <<"->" << ins->getOperand(1)->getName() <<" ) : ";
+                if(result)
+                    errs() << "passed ";
+                else
+                    errs() << "failed ";
+    //            ins->print(errs());
+                errs() << "\n";
+                testNumber++;
+            }
+            errs() <<"\t#-----------------------------------------------------------#\n";
         }
-        errs() <<"\t#-----------------------------------------------------------#\n";
     }
 
 
