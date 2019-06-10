@@ -1,25 +1,26 @@
 using namespace llvm;
 class LhsRhsFinder
 {
-    private:
+    protected:
         using lhs = std::pair<Value*, int>;
 	    using rhs = std::vector<std::pair<Value*, int>>;
         std::map<Instruction*, std::pair<lhs, rhs>> lhsRhsMap;
         std::stack<std::vector<std::pair<Value*, int>>> st;
     	std::map<Instruction*, rhs> useMap;
-    	std::map<std::tuple<Function*, BasicBlock*, Instruction*>, std::vector<std::tuple<Function*, BasicBlock*, Instruction*>>> predIns, succIns;
-    	std::map<std::pair<BasicBlock*, Function*>, std::map<int, Instruction*>> instCounter;
+    	std::map<std::tuple<Function*, BasicBlock*, Instruction*>, std::set<std::tuple<Function*, BasicBlock*, Instruction*>>> predIns, succIns;
+    	std::map<std::pair<BasicBlock*, Function*>, std::map<Instruction*, int>> instCounter;
     	std::map<Instruction*, rhs> funcToArgMap;
 
     public:
         void metaDataSetter(Function* F);
-        void computePredSucc(Instruction* I, int counter, BasicBlock* BB, Function* F);
+        void setPredSucc(Function* F);
+        void computePredSucc(Instruction* I, BasicBlock* BB, Function* F);
         std::pair<Value*, int> getLHS(Instruction* ins);
         std::vector<std::pair<Value*, int>> getRHS(Instruction*);
         std::vector<std::pair<Value*, int>> getUSE(Instruction*);
         std::vector<std::pair<Value*, int>> getArg(Instruction*);
-        std::vector<std::tuple<Function*, BasicBlock*, Instruction*>> getPredecessor(Function*, BasicBlock*, Instruction*);
-        std::vector<std::tuple<Function*, BasicBlock*, Instruction*>> getSuccesor(Function*, BasicBlock*, Instruction*);
+        std::set<std::tuple<Function*, BasicBlock*, Instruction*>> getPredecessor(Function*, BasicBlock*, Instruction*);
+        std::set<std::tuple<Function*, BasicBlock*, Instruction*>> getSuccesor(Function*, BasicBlock*, Instruction*);
         void print();
 
 
@@ -28,34 +29,38 @@ class LhsRhsFinder
 
 
 //------------------ utility function to compute pred and succ ----------//
-void LhsRhsFinder::computePredSucc(Instruction* I, int counter, BasicBlock* BB, Function* F)
+void LhsRhsFinder::computePredSucc(Instruction* I, BasicBlock* BB, Function* F)
 {
+    int counter = instCounter[std::make_pair(BB, F)][I];
     if(counter == 0)
     {//first instruction of basic block
         for(auto it = pred_begin(BB), et = pred_end(BB); it != et; ++it)
         {
             BasicBlock* pred = *it;
             Function* parent = pred->getParent();
-            Instruction* pIns = instCounter[std::make_pair(pred, parent)].rbegin()->second;
-            predIns[std::make_tuple(F, BB, I)].push_back(std::make_tuple(parent, pred, pIns));
-            succIns[std::make_tuple(parent, pred, pIns)].push_back(std::make_tuple(F, BB, I));
+//            if(instCounter[std::make_pair(pred, parent)] != instCounter.end())
+//            {
+                Instruction* pIns = instCounter[std::make_pair(pred, parent)].rbegin()->first;
+                predIns[std::make_tuple(F, BB, I)].insert(std::make_tuple(parent, pred, pIns));
+                succIns[std::make_tuple(parent, pred, pIns)].insert(std::make_tuple(F, BB, I));
+//            }
         }
     }
     else
     {
-        Instruction* pIns = instCounter[std::make_pair(BB, F)].rbegin()->second;
-        predIns[std::make_tuple(F, BB, I)].push_back(std::make_tuple(F, BB, pIns));
-        succIns[std::make_tuple(F,BB,pIns)].push_back(std::make_tuple(F,BB,I));
+        Instruction* pIns = instCounter[std::make_pair(BB, F)].rbegin()->first;
+        predIns[std::make_tuple(F, BB, I)].insert(std::make_tuple(F, BB, pIns));
+        succIns[std::make_tuple(F,BB,pIns)].insert(std::make_tuple(F,BB,I));
     }
-    instCounter[std::make_pair(BB, F)][counter+1] = I;
+
 }
 
-std::vector<std::tuple<Function*, BasicBlock*, Instruction*>> LhsRhsFinder::getPredecessor(Function* f, BasicBlock* bb, Instruction* i)
+std::set<std::tuple<Function*, BasicBlock*, Instruction*>> LhsRhsFinder::getPredecessor(Function* f, BasicBlock* bb, Instruction* i)
 {   //returns pred vector
     return predIns[std::make_tuple(f, bb, i)];
 }
 
-std::vector<std::tuple<Function*, BasicBlock*, Instruction*>> LhsRhsFinder::getSuccesor(Function* f, BasicBlock* bb, Instruction* i)
+std::set<std::tuple<Function*, BasicBlock*, Instruction*>> LhsRhsFinder::getSuccesor(Function* f, BasicBlock* bb, Instruction* i)
 {   //returns succ vector
     return succIns[std::make_tuple(f, bb, i)];
 }
@@ -140,7 +145,7 @@ void LhsRhsFinder::metaDataSetter(Function* F)
                     lhsRhsMap[I] = std::make_pair(LHS, RHS);
 
                 //pred and succ calculation
-                    computePredSucc(I, counter, BB, F);
+                    instCounter[std::make_pair(BB, F)][I] = counter;
                     counter++;
                 }
 
@@ -160,14 +165,17 @@ void LhsRhsFinder::metaDataSetter(Function* F)
             }
             else if(isa<ReturnInst>(I) or isa<ICmpInst>(I))
             {
+
                 if(!st.empty())
                 {
+
                     while(!st.empty())
                     {
+
                         useMap[I].push_back(st.top()[0]);
                         st.pop();
                     }
-                    computePredSucc(I, counter, BB, F);
+                    instCounter[std::make_pair(BB, F)][I] = counter;
                     counter++;
                 }
             }
@@ -179,11 +187,12 @@ void LhsRhsFinder::metaDataSetter(Function* F)
                     funcToArgMap[I].push_back(st.top()[0]);
                     st.pop();
                 }
-                computePredSucc(I, counter, BB, F);
+                instCounter[std::make_pair(BB, F)][I] = counter;
                 counter++;
             }
             else if(st.size() >= 2)
             {
+
                 std::vector<std::pair<Value*, int>> v = st.top();
                 st.pop();
                 for(auto it : st.top())
@@ -193,9 +202,25 @@ void LhsRhsFinder::metaDataSetter(Function* F)
                 st.pop();
                 st.push(v);
             }
+
         }
     }
 }
+
+void LhsRhsFinder::setPredSucc(Function* F)
+{
+    for(Function::iterator bb=F->begin(), e=F->end(); e!=bb;++bb)
+    {
+        BasicBlock* BB = &(*bb);
+        for(BasicBlock::iterator i=bb->begin(), e=bb->end(); i!=e; ++i)
+        {
+            Instruction* I = &(*i);
+            if(instCounter[std::make_pair(BB, F)].find(I) != instCounter[std::make_pair(BB, F)].end())
+                computePredSucc(I, BB, F);
+        }
+    }
+}
+
 
 
 //-------------------- print function --------------------------//

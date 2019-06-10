@@ -75,6 +75,7 @@ namespace
         std::string demangle(const char*);
         std::string getOriginalName(Function*);
         void removeExtraPointerInfo();
+        bool isAcceptable(Instruction*);
     };
     LFCPA lfcpaObj;
     static int context = 0;
@@ -126,7 +127,6 @@ namespace
 //-------------------- foward/backward flow analysis ---------------//
     void LFCPA::doAnalysisForward()
     {
-//        errs() << "doAnalysisForward start" << '\n';
         while(!forwardWorklist.empty())
         {
             int contextId;
@@ -237,27 +237,26 @@ namespace
                     {
                         std::map<Value*, std::set<Value*>> fIN = inValues[std::make_pair(contextId, currentFunction)].first;
                         std::set<Value*> bOUT = inValues[std::make_pair(contextId, currentFunction)].second;
-                        //setting outflow
-                        std::get<1>(transitionTable[std::make_tuple(currentFunction, fIN, bOUT)]) = newOUT;
-//                        errs() << " (forward) Leaving function " << currentFunction->getName() << " putting its callers in forward and backward worklist" << '\n';
-                        for(auto callers : transitionGraph[contextId].first)
+                        std::map<Value*, std::set<Value*>> oldInflow = std::get<1>(transitionTable[std::make_tuple(currentFunction, fIN, bOUT)]);
+                        if(oldInflow != newOUT)
                         {
-                            std::deque<std::tuple<Function*, BasicBlock*, int>> tempWorklist;
-                            tempWorklist.push_back(callers);
-                            forwardWorklist.push_front(callers);
-                            backwardWorklist.push_back(callers);
-                            tempWorklist.clear();
+                            //setting outflow
+                            std::get<1>(transitionTable[std::make_tuple(currentFunction, fIN, bOUT)]) = newOUT;
+    //                        errs() << " (forward) Leaving function " << currentFunction->getName() << " putting its callers in forward and backward worklist" << '\n';
+                            for(auto callers : transitionGraph[contextId].first)
+                            {
+                                forwardWorklist.push_front(callers);
+                                backwardWorklist.push_back(callers);
+                            }
                         }
                     }
                 }
             }
         }
-//        errs() << "doAnalysisForward end" << '\n';
     }
 
     void LFCPA::doAnalysisBackward()
     {
-//        errs() << "doAnalysisBackward strt" << '\n';
         while(!backwardWorklist.empty())
         {
             int currentContext;
@@ -293,16 +292,10 @@ namespace
                 //function call
                 if(currentIns->getOpcode() == 55)
                 {
-                    // errs() <<"-----------------------\nCAll Stmt, printing IN and OUT :\nIN : ";
-//					        for(auto in : IN[std::make_tuple(currentContext, calledFunction, currentIns)].second)
-//					            errs() << in.first->getName() << ", ";
-//					        errs() << "\nOUT : ";
-//					        for(auto in : OUT[std::make_tuple(currentContext, calledFunction, currentIns)].second)
-//					            errs() << in.first->getName() << ", ";
-//					        errs() <<"\n--------------";
                     int numberOfArg = currentIns->operands().end() - currentIns->operands().begin() - 1;
                     Function* calledFunction = cast<CallInst>(currentIns)->getCalledFunction();
                     std::string originalName = getOriginalName(calledFunction);
+
                     if(originalName == "isLive")
                     {
                         liveTests.insert(std::make_tuple(currentContext, currentFunction, currentIns));
@@ -314,6 +307,7 @@ namespace
                     }
                     else
                     {
+
                         //check for existance in transiation table
                         std::map<Value*, std::set<Value*>> fIN = IN[std::make_tuple(currentContext, currentFunction, currentIns)].first;
                         std::set<Value*> bOUT = OUT[std::make_tuple(currentContext, currentFunction, currentIns)].second;
@@ -322,6 +316,7 @@ namespace
                         int newContext;
                         if(transitionTable.find(std::make_tuple(calledFunction, fIN, bOUT)) == transitionTable.end())
                         {
+//                            errs() << currentFunction->getName() << " " << calledFunction->getName() <<" new\n";
                             newContext = ++context;
                             initContext(calledFunction, fIN, bOUT);
                             //setting up the context for new context
@@ -332,6 +327,7 @@ namespace
                         }
                         else
                         {
+//                            errs() << currentFunction->getName() << " " << calledFunction->getName() <<" old\n";
                             newContext = std::get<0>(transitionTable[std::make_tuple(calledFunction, fIN, bOUT)]);
                             std::set<Value*> inflow = std::get<2>(transitionTable[std::make_tuple(calledFunction, fIN, bOUT)]);
 //                                    std::set<Value*> tempAns;
@@ -375,26 +371,24 @@ namespace
                     if(currentBlock == &(*currentFunction->begin()))
                     {
                         std::map<Value*, std::set<Value*>> fIN = inValues[std::make_pair(currentContext, currentFunction)].first;
-
                         std::set<Value*> bOUT = inValues[std::make_pair(currentContext, currentFunction)].second;
-                        //setting outflow
+                        std::set<Value*> oldOutflow = std::get<2>(transitionTable[std::make_tuple(currentFunction, fIN, bOUT)]);
 
-                        std::get<2>(transitionTable[std::make_tuple(currentFunction, fIN, bOUT)]) = newIN;
-//                        errs() << " (backward) Leaving function " << currentFunction->getName() << " putting its callers in forward and backward worklist" << '\n';
-                        for(auto callers : transitionGraph[currentContext].first)
+                        if(oldOutflow != newIN)
                         {
-                            std::deque<std::tuple<Function*, BasicBlock*, int>> tempWorklist;
-                            tempWorklist.push_back(callers);
-                            forwardWorklist.push_front(callers);
-                            backwardWorklist.push_back(callers);
-                            tempWorklist.clear();
+                            //setting outflow
+                            std::get<2>(transitionTable[std::make_tuple(currentFunction, fIN, bOUT)]) = newIN;
+    //                        errs() << " (backward) Leaving function " << currentFunction->getName() << " putting its callers in forward and backward worklist" << '\n';
+                            for(auto callers : transitionGraph[currentContext].first)
+                            {
+                                forwardWorklist.push_front(callers);
+                                backwardWorklist.push_back(callers);
+                            }
                         }
                     }
                 }
             }
         }
-
-//        errs() << "doAnalysisBackward end" << '\n';
     }
 
 
@@ -626,12 +620,6 @@ namespace
             doAnalysisBackward();
             doAnalysisForward();
         }
-//        printTransitionGraph();
-//        printINandOUT();
-
-//        printTransitionTable();
-//        printForwardINandOUT();
-//        errs() << " main() function end" << "\n";
         removeExtraPointerInfo();
         pointsToTestResult();
         livenessTestResult();
@@ -813,7 +801,7 @@ namespace
 
         std::unique_ptr<char, void(*)(void*)> res { abi::__cxa_demangle(name, NULL, NULL, &status), std::free };
         return (status == 0) ? res.get() : std::string(name);
-}
+    }
 
     std::string LFCPA::getOriginalName(Function* calledFunction)
     {
@@ -825,35 +813,56 @@ namespace
         return s1;
     }
 
+    bool LFCPA::isAcceptable(Instruction* ins)
+    {
+        bool result = false;
+        if(isa<CallInst>(ins))
+            result = true;
+        if(lhsRhsMap.count(ins))
+            result = true;
+        if(useMap.count(ins))
+            result = true;
+        return result;
+    }
+
     void LFCPA::removeExtraPointerInfo()
     {
+        std::vector<std::tuple<int, Function*, Instruction*>> deleter;
         for(auto it : IN)
         {
-            std::set<Value*> bIN, bOUT;
-            std::map<Value*, std::set<Value*>> fIN, fOUT;
-            fIN = it.second.first;
-            fOUT = OUT[it.first].first;
-            bIN = it.second.second;
-            bOUT = OUT[it.first].second;
-            //setting IN
-            for(auto fINIt : fIN)
+            Instruction* ins = std::get<2>(it.first);
+            if(isAcceptable(ins))
             {
-                Value* key = fINIt.first;
-                if(bIN.count(key) == 0)
-                    IN[it.first].first.erase(key);
+                std::set<Value*> bIN, bOUT;
+                std::map<Value*, std::set<Value*>> fIN, fOUT;
+                fIN = it.second.first;
+                fOUT = OUT[it.first].first;
+                bIN = it.second.second;
+                bOUT = OUT[it.first].second;
+                //setting IN
+                for(auto fINIt : fIN)
+                {
+                    Value* key = fINIt.first;
+                    if(bIN.count(key) == 0)
+                        IN[it.first].first.erase(key);
+                }
+    //            //setting OUT
+                for(auto fOUTIt : fOUT)
+                {
+                    Value* key = fOUTIt.first;
+                    if(bOUT.count(key) == 0)
+                        OUT[it.first].first.erase(key);
+                }
             }
-//            //setting OUT
-            for(auto fOUTIt : fOUT)
+            else
             {
-                Value* key = fOUTIt.first;
-                if(bOUT.count(key) == 0)
-                    OUT[it.first].first.erase(key);
+                deleter.push_back(it.first);
             }
-//            for(auto fOUTIt : fOUT)
-//            {
-//                if(!bOUT.count(fOUTIt.first))
-//                    fOUT.erase(fOUTIt.first);
-//            }
+        }
+        for(auto deleteKey : deleter)
+        {
+            IN.erase(deleteKey);
+            OUT.erase(deleteKey);
         }
     }
 
@@ -916,6 +925,7 @@ namespace
         virtual bool runOnFunction(Function &F)
         {
             lfcpaObj.metaDataSetter(&F);
+//            lfcpaObj.setPredSucc(&F);
             if(F.getName() == "main")
             {
                 lfcpaObj.run(&F);

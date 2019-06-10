@@ -3,13 +3,11 @@ source_filename = "test.cpp"
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-pc-linux-gnu"
 
-$_Z6isLiveIPiEvRT_ = comdat any
-
-$_Z6isLiveIPPiEvRT_ = comdat any
+$_Z12isPointingToIPiiEvRT_RT0_ = comdat any
 
 $_Z12isPointingToIPPiS0_EvRT_RT0_ = comdat any
 
-$_Z12isPointingToIPiiEvRT_RT0_ = comdat any
+$_Z6isLiveIPiEvRT_ = comdat any
 
 @y = dso_local global i32** null, align 8
 @v = dso_local global i32* null, align 8
@@ -23,52 +21,39 @@ define dso_local i32 @main() #0 {
 bb:
   %tmp = alloca i32, align 4
   store i32 0, i32* %tmp, align 4
-  call void @_Z6isLiveIPiEvRT_(i32** dereferenceable(8) @u)
   store i32** @v, i32*** @y, align 8
   store i32** @u, i32*** @z, align 8
   store i32* @w, i32** @x, align 8
-  call void @_Z6isLiveIPPiEvRT_(i32*** dereferenceable(8) @z)
-  %tmp1 = load i32, i32* @w, align 4
-  %tmp2 = icmp ne i32 %tmp1, 0
-  br i1 %tmp2, label %bb3, label %bb8
-
-bb3:                                              ; preds = %bb
+  call void @_Z12isPointingToIPiiEvRT_RT0_(i32** dereferenceable(8) @x, i32* dereferenceable(4) @w)
   call void @_Z12isPointingToIPPiS0_EvRT_RT0_(i32*** dereferenceable(8) @y, i32** dereferenceable(8) @v)
-  call void @_Z12isPointingToIPPiS0_EvRT_RT0_(i32*** dereferenceable(8) @z, i32** dereferenceable(8) @u)
-  %tmp4 = load i32*, i32** @x, align 8
-  %tmp5 = load i32, i32* %tmp4, align 4
-  %tmp6 = load i32**, i32*** @z, align 8
-  %tmp7 = load i32*, i32** %tmp6, align 8
-  store i32 %tmp5, i32* %tmp7, align 4
-  br label %bb10
+  br label %bb1
 
-bb8:                                              ; preds = %bb
-  %tmp9 = load i32**, i32*** @y, align 8
-  store i32** %tmp9, i32*** @z, align 8
-  br label %bb10
+bb1:                                              ; preds = %bb4, %bb
+  %tmp2 = load i32, i32* @w, align 4
+  %tmp3 = icmp sgt i32 %tmp2, 0
+  br i1 %tmp3, label %bb4, label %bb6
 
-bb10:                                             ; preds = %bb8, %bb3
-  call void @_Z12isPointingToIPPiS0_EvRT_RT0_(i32*** dereferenceable(8) @z, i32** dereferenceable(8) @u)
-  call void @_Z12isPointingToIPiiEvRT_RT0_(i32** dereferenceable(8) @u, i32* dereferenceable(4) @w)
+bb4:                                              ; preds = %bb1
   call void @_Z6isLiveIPiEvRT_(i32** dereferenceable(8) @u)
-  %tmp11 = load i32*, i32** @u, align 8
-  %tmp12 = load i32, i32* %tmp11, align 4
-  ret i32 %tmp12
+  %tmp5 = load i32*, i32** @x, align 8
+  store i32* %tmp5, i32** @u, align 8
+  call void @_Z6isLiveIPiEvRT_(i32** dereferenceable(8) @u)
+  br label %bb1
+
+bb6:                                              ; preds = %bb1
+  %tmp7 = load i32**, i32*** @z, align 8
+  %tmp8 = load i32*, i32** %tmp7, align 8
+  %tmp9 = load i32, i32* %tmp8, align 4
+  ret i32 %tmp9
 }
 
 ; Function Attrs: noinline nounwind optnone uwtable
-define linkonce_odr dso_local void @_Z6isLiveIPiEvRT_(i32** dereferenceable(8) %arg) #1 comdat {
+define linkonce_odr dso_local void @_Z12isPointingToIPiiEvRT_RT0_(i32** dereferenceable(8) %arg, i32* dereferenceable(4) %arg1) #1 comdat {
 bb:
   %tmp = alloca i32**, align 8
+  %tmp2 = alloca i32*, align 8
   store i32** %arg, i32*** %tmp, align 8
-  ret void
-}
-
-; Function Attrs: noinline nounwind optnone uwtable
-define linkonce_odr dso_local void @_Z6isLiveIPPiEvRT_(i32*** dereferenceable(8) %arg) #1 comdat {
-bb:
-  %tmp = alloca i32***, align 8
-  store i32*** %arg, i32**** %tmp, align 8
+  store i32* %arg1, i32** %tmp2, align 8
   ret void
 }
 
@@ -83,12 +68,10 @@ bb:
 }
 
 ; Function Attrs: noinline nounwind optnone uwtable
-define linkonce_odr dso_local void @_Z12isPointingToIPiiEvRT_RT0_(i32** dereferenceable(8) %arg, i32* dereferenceable(4) %arg1) #1 comdat {
+define linkonce_odr dso_local void @_Z6isLiveIPiEvRT_(i32** dereferenceable(8) %arg) #1 comdat {
 bb:
   %tmp = alloca i32**, align 8
-  %tmp2 = alloca i32*, align 8
   store i32** %arg, i32*** %tmp, align 8
-  store i32* %arg1, i32** %tmp2, align 8
   ret void
 }
 
