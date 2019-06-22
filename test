@@ -10,6 +10,6 @@ cmake ..
 make
 popd
 clang++-8 -S -emit-llvm test.cpp -o test.bc
-opt-8 -instnamer -load _build/*/*BValueContext* -bvc test.bc > /dev/null
+time opt-8 -instnamer -load _build/*/*BValueContext* -bvc test.bc > /dev/null
 #~/llvm-toolchain-8_8~svn353031/build-llvm/bin/opt -debug -instnamer -load _build/*/*SLVA* -slva test.bc > /dev/null
-rm -rf _build test.bc
+# rm -rf _build test.bc

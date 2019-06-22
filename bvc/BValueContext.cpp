@@ -4,18 +4,8 @@
 #include "llvm/IR/Value.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CFG.h"
-#include "llvm/IR/InstrTypes.h"
-#include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
-#include "llvm/IR/IntrinsicInst.h"
-#include "llvm/IR/Intrinsics.h"
-#include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/DenseSet.h"
-#include <vector>
-#include <utility>
 #include <bits/stdc++.h>
-#include <memory>
-#include <string>
 #include <cxxabi.h>
 #include "lhsRhsPass.cpp"
 namespace
@@ -23,7 +13,7 @@ namespace
     class LFCPA : public LhsRhsFinder
     {
     private:
-        using contextId = int;
+        using contextId = long long int ;
         using forwardEntryValue = std::map<Value*, std::set<Value*>>;
         using forwardExitValue = std::map<Value*, std::set<Value*>>;
         using forwardDataFlowValue = std::map<Value*, std::set<Value*>>;
@@ -39,8 +29,8 @@ namespace
         using callers = std::set<std::tuple<Function*, callSite, contextId>>;
         using callee = std::map<std::pair<callSite, insId>, contextId>;
 
-        using lhs = std::pair<Value*, int>;
-        using rhs = std::vector<std::pair<Value*, int>>;
+        using lhs = std::pair<Value*, long long int >;
+        using rhs = std::vector<std::pair<Value*, long long int >>;
 
         std::map<std::tuple<Function*, forwardEntryValue, backwardEntryValue>, std::tuple<contextId, forwardExitValue, backwardExitValue>> transitionTable;
         std::map<contextId, std::pair<callers, callee>> transitionGraph;
@@ -50,8 +40,10 @@ namespace
         std::map<std::tuple<contextId, Function*, insId>, std::pair<forwardDataFlowValue, backwardDataFlowValue>> IN, OUT;
         std::map<std::pair<contextId, Function*>, std::pair<forwardEntryValue, backwardEntryValue>> inValues;
         std::map<Function*, std::pair<Instruction*, BasicBlock*>> funcTolastIB;
-        std::set<std::tuple<int, Function*, Instruction*>> liveTests;
-        std::set<std::tuple<int, Function*, Instruction*>> pointsToTests;
+        std::set<std::tuple<long long int , Function*, Instruction*>> liveTests;
+        std::set<std::tuple<long long int , Function*, Instruction*>> pointsToTests;
+        std::map<Value*, std::set<Value*>> totalPointers;
+        long long int  before, after;
 
     public:
         void initContext(Function*, std::map<Value*, std::set<Value*>>, std::set<Value*>);
@@ -59,11 +51,11 @@ namespace
         void doAnalysisBackward();
         std::map<Value*, std::set<Value*>> merge(std::map<Value*, std::set<Value*>>, std::map<Value*, std::set<Value*>> );
         std::set<Value*> backwardMerge(std::set<Value*>, std::set<Value*>);
-        std::set<Value*> backwardNormalFunction(Instruction*, Function*, int);
-        std::map<Value*, std::set<Value*>> forwardNormalFlowFunction(Instruction*, Function*, int);
-        std::map<Value*, std::set<Value*>> forwardLocalFlowFunction(Instruction*, Function*, int);
-        std::set<Value*> backwardLocalFlowFunction(Instruction*, Function*, int);
-        void printWorklist(std::deque<std::tuple<Function*, BasicBlock*, int>>);
+        std::set<Value*> backwardNormalFunction(Instruction*, Function*, long long int );
+        std::map<Value*, std::set<Value*>> forwardNormalFlowFunction(Instruction*, Function*, long long int );
+        std::map<Value*, std::set<Value*>> forwardLocalFlowFunction(Instruction*, Function*, long long int );
+        std::set<Value*> backwardLocalFlowFunction(Instruction*, Function*, long long int );
+        void printWorklist(std::deque<std::tuple<Function*, BasicBlock*, long long int >>);
         void printTransitionGraph();
         void printTransitionTable();
         void printINandOUT();
@@ -71,14 +63,16 @@ namespace
         void run(Function*);
         void livenessTestResult();
         void pointsToTestResult();
-        std::set<Value*> inInserter(std::set<Value*>, std::vector<std::pair<Value*, int>>, std::map<Value*, std::set<Value*>>);
+        std::set<Value*> inInserter(std::set<Value*>, std::vector<std::pair<Value*, long long int >>, std::map<Value*, std::set<Value*>>);
         std::string demangle(const char*);
         std::string getOriginalName(Function*);
         void removeExtraPointerInfo();
         bool isAcceptable(Instruction*);
+        void totalPointsToPairs();
+        long long int findTotalPointer();
     };
     LFCPA lfcpaObj;
-    static int context = 0;
+    static long long int  context = 0;
 
 
 //-------------------- function to initialise context --------------//
@@ -90,7 +84,7 @@ namespace
         //updating transition graph
         transitionGraph[context];
 
-        std::vector<std::tuple<Function*, BasicBlock*, int>> tempWorklist;
+        std::vector<std::tuple<Function*, BasicBlock*, long long int >> tempWorklist;
         for(Function::iterator bb=F->begin(), e=F->end(); e!=bb;++bb)
         {
             BasicBlock *BB = &(*bb);
@@ -107,7 +101,7 @@ namespace
         }
 
         // filling forwardWorklist
-        for(int i=tempWorklist.size()-1; i>=0; i--)
+        for(long long int  i=tempWorklist.size()-1; i>=0; i--)
         {
             forwardWorklist.push_front(tempWorklist[i]);
         }
@@ -129,7 +123,7 @@ namespace
     {
         while(!forwardWorklist.empty())
         {
-            int contextId;
+            long long int  contextId;
             Function* currentFunction;
             BasicBlock* currentBlock;
             std::tie(currentFunction, currentBlock, contextId) = forwardWorklist.front();
@@ -165,7 +159,7 @@ namespace
     //						errs() << currentIns->getOpcode() << '\n';
                 if(currentIns->getOpcode() == 55)
                 {
-                    int numberOfArg = currentIns->operands().end() - currentIns->operands().begin() - 1;
+                    long long int numberOfArg = currentIns->operands().end() - currentIns->operands().begin() - 1;
                     Function* calledFunction = cast<CallInst>(currentIns)->getCalledFunction();
                     std::string originalName = getOriginalName(calledFunction);
                     if(originalName == "isLive")
@@ -184,7 +178,7 @@ namespace
                         std::set<Value*> bOUT = OUT[std::make_tuple(contextId, currentFunction, currentIns)].second;
 
                         //does not exist
-                        int newContext;
+                        long long int  newContext;
                         if(transitionTable.find(std::make_tuple(calledFunction, fIN, bOUT)) == transitionTable.end())
                         {
                             newContext = ++context;
@@ -259,7 +253,7 @@ namespace
     {
         while(!backwardWorklist.empty())
         {
-            int currentContext;
+            long long int  currentContext;
             Function* currentFunction;
             BasicBlock* currentBlock;
             std::tie(currentFunction, currentBlock, currentContext) = backwardWorklist.back();
@@ -292,7 +286,7 @@ namespace
                 //function call
                 if(currentIns->getOpcode() == 55)
                 {
-                    int numberOfArg = currentIns->operands().end() - currentIns->operands().begin() - 1;
+                    long long int  numberOfArg = currentIns->operands().end() - currentIns->operands().begin() - 1;
                     Function* calledFunction = cast<CallInst>(currentIns)->getCalledFunction();
                     std::string originalName = getOriginalName(calledFunction);
 
@@ -313,7 +307,7 @@ namespace
                         std::set<Value*> bOUT = OUT[std::make_tuple(currentContext, currentFunction, currentIns)].second;
 
                         //does not exist
-                        int newContext;
+                        long long int  newContext;
                         if(transitionTable.find(std::make_tuple(calledFunction, fIN, bOUT)) == transitionTable.end())
                         {
 //                            errs() << currentFunction->getName() << " " << calledFunction->getName() <<" new\n";
@@ -389,7 +383,7 @@ namespace
 
 
 //-------------------- forwardFlow utility functions ----------------//
-    std::map<Value*, std::set<Value*>> LFCPA::forwardLocalFlowFunction(Instruction* ins, Function* function, int contextId)
+    std::map<Value*, std::set<Value*>> LFCPA::forwardLocalFlowFunction(Instruction* ins, Function* function, long long int  contextId)
     {
 //			    errs() << "forwardNormalFlwFunction called" << '\n';
         /*
@@ -400,7 +394,7 @@ namespace
         return OUT[std::make_tuple(contextId, function, ins)].first;
     }
 
-    std::map<Value*, std::set<Value*>> LFCPA::forwardNormalFlowFunction(Instruction* ins, Function* function, int contextId)
+    std::map<Value*, std::set<Value*>> LFCPA::forwardNormalFlowFunction(Instruction* ins, Function* function, long long int  contextId)
     {
 //			    errs() << "forwardNormalFlwFunction called" << '\n';
         /*
@@ -414,11 +408,11 @@ namespace
         std::set<Value*> backwardOUT = OUT[std::make_tuple(contextId, function, ins)].second;
         if(isa<StoreInst>(ins) and getRHS(ins).size()==1)
         {
-            std::pair<Value*, int> LHS = getLHS(ins);
-            std::pair<Value*, int> RHS = getRHS(ins)[0];
+            std::pair<Value*, long long int > LHS = getLHS(ins);
+            std::pair<Value*, long long int > RHS = getRHS(ins)[0];
             std::set<Value*> rhsSet;
             //getting rhs part
-            int rhsIndir = RHS.second;
+            long long int  rhsIndir = RHS.second;
             Value* rhsValue = RHS.first;
             if(rhsIndir == -1)
             {
@@ -454,7 +448,7 @@ namespace
                 }
             }
             //setting lhs
-            int lhsIndir = LHS.second;
+            long long int  lhsIndir = LHS.second;
             std::queue<Value*> q;
             Value* nullValue = NULL;
             q.push(LHS.first);
@@ -512,7 +506,7 @@ namespace
         return prevOUT;
     }
 
-    std::set<Value*> LFCPA::backwardNormalFunction(Instruction* ins, Function* function, int contextId)
+    std::set<Value*> LFCPA::backwardNormalFunction(Instruction* ins, Function* function, long long int contextId)
     {
         /*
             Perform normal flow operation
@@ -529,9 +523,9 @@ namespace
         //lhs = rhs
         if(isa<StoreInst>(ins))
         {
-            std::pair<Value* ,int> LHS = getLHS(ins);
-            std::vector<std::pair<Value* ,int>> RHS = getRHS(ins);
-            int lhsIndir = LHS.second;
+            std::pair<Value* ,long long int > LHS = getLHS(ins);
+            std::vector<std::pair<Value* ,long long int >> RHS = getRHS(ins);
+            long long int  lhsIndir = LHS.second;
             // x = RHS
             if(lhsIndir==0)
             {
@@ -586,7 +580,7 @@ namespace
         //use(x)
         else if(isa<ReturnInst>(ins) or isa<ICmpInst>(ins))
         {
-            std::vector<std::pair<Value*, int>> use = getUSE(ins);
+            std::vector<std::pair<Value*, long long int >> use = getUSE(ins);
             INofInst = inInserter(INofInst, use, forwardOUT);
         }
 //				ins->print(errs());
@@ -594,10 +588,10 @@ namespace
         return INofInst;
     }
 
-    std::set<Value*> LFCPA::backwardLocalFlowFunction(Instruction* ins, Function* function, int contextId)
+    std::set<Value*> LFCPA::backwardLocalFlowFunction(Instruction* ins, Function* function, long long int  contextId)
     {
         std::set<Value*> INofInst = IN[std::make_tuple(contextId, function, ins)].second;
-        std::vector<std::pair<Value*, int>> argList = getArg(ins);
+        std::vector<std::pair<Value*, long long int >> argList = getArg(ins);
         std::map<Value*, std::set<Value*>> forwardOUT = OUT[std::make_tuple(contextId, function, ins)].first;
         INofInst = inInserter(INofInst, argList, forwardOUT);
         return INofInst;
@@ -616,18 +610,29 @@ namespace
             doAnalysisBackward();
             doAnalysisForward();
         }
+        before = after = 0;
+
+        totalPointers.clear();
+        before = findTotalPointer();
+
         removeExtraPointerInfo();
+
+        totalPointers.clear();
+        after = findTotalPointer();
+
         pointsToTestResult();
         livenessTestResult();
+        totalPointsToPairs();
+        // printTransitionGraph();
     }
 
 
-//--------------------print functions ---------------------------//
+//--------------------prlong long int functions ---------------------------//
     void LFCPA::printINandOUT()
     {
         for(auto InOutIt : IN)
         {
-            int contextId;
+            long long int  contextId;
             Function* function;
             Instruction* ins;
             errs() << "-----------------------------------------\n";
@@ -649,7 +654,7 @@ namespace
     {
         for(auto InOutIt : IN)
         {
-            int contextId;
+            long long int  contextId;
             Function* function;
             Instruction* ins;
             errs() << "-----------------------------------------\n";
@@ -698,13 +703,13 @@ namespace
         }
     }
 
-    void LFCPA::printWorklist(std::deque<std::tuple<Function*, BasicBlock*, int>> worklist)
+    void LFCPA::printWorklist(std::deque<std::tuple<Function*, BasicBlock*, long long int >> worklist)
     {
         for(auto w : worklist)
         {
             Function* wFunction;
             BasicBlock* wBB;
-            int wContext;
+            long long int  wContext;
             std::tie(wFunction, wBB, wContext) = w;
             if(wBB != NULL)
                 errs() << wFunction->getName() << " " << wBB->getName() << " " << wContext << '\n';
@@ -721,7 +726,7 @@ namespace
             Function* func;
             std::map<Value*, std::set<Value*>> fEntry, fExit;
             std::set<Value*> bEntry, bExit;
-            int context;
+            long long int  context;
             std::tie(func, fEntry, bEntry) = it.first;
             std::tie(context, fExit, bExit) = it.second;
             errs() << "\t\tfunctionName\t: " << getOriginalName(func) << "\n";
@@ -762,12 +767,12 @@ namespace
 
 
 //-------------------- other utility functions --------------//
-    std::set<Value*> LFCPA:: inInserter(std::set<Value*> currentIN, std::vector<std::pair<Value*, int>> list, std::map<Value*, std::set<Value*>> forwardOUT)
+    std::set<Value*> LFCPA:: inInserter(std::set<Value*> currentIN, std::vector<std::pair<Value*, long long int >> list, std::map<Value*, std::set<Value*>> forwardOUT)
     {
         std::set<Value*> INofInst = currentIN;
         for(auto listValues : list)
         {
-            int listValuesIndir = listValues.second;
+            long long int  listValuesIndir = listValues.second;
             std::queue<Value*> q;
             Value* nullValue = NULL;
             q.push(listValues.first);
@@ -824,7 +829,7 @@ namespace
 
     void LFCPA::removeExtraPointerInfo()
     {
-        std::vector<std::tuple<int, Function*, Instruction*>> deleter;
+        std::vector<std::tuple<long long int , Function*, Instruction*>> deleter;
         for(auto it : IN)
         {
             Instruction* ins = std::get<2>(it.first);
@@ -869,11 +874,11 @@ namespace
         if(liveTests.size() > 0)
         {
             errs() <<"\n\t#-------------------- Liveness Test ------------------------#\n\t\n";
-            int testNumber = 0;
+            long long int testNumber = 0;
             bool result;
             for(auto testCases : liveTests)
             {
-                int context;
+                long long int context;
                 Function* func;
                 Instruction* ins;
                 std::tie(context, func, ins) = testCases;
@@ -896,11 +901,11 @@ namespace
         if(pointsToTests.size() > 0)
         {
             errs() <<"\n\t#-------------------- PointsTo Test ------------------------#\n\t\n";
-            int testNumber = 0;
+            long long int testNumber = 0;
             bool result;
             for(auto testCases : pointsToTests)
             {
-                int context;
+                long long int context;
                 Function* func;
                 Instruction* ins;
                 std::tie(context, func, ins) = testCases;
@@ -918,6 +923,35 @@ namespace
         }
     }
 
+
+    long long int LFCPA::findTotalPointer()
+    {
+        long long ans=0;
+        for(auto it : IN)
+        {
+            std::map<Value*, std::set<Value*>> pointsTopairs = it.second.first;
+            for(auto mapIt : pointsTopairs)
+            {
+                Value* key = mapIt.first;
+                std::set<Value*> value = mapIt.second;
+//                errs() << key->getName() << " " << value.size() << "\n";
+                totalPointers[key] = value;
+            }
+        }
+        for(auto it : totalPointers)
+        {
+            ans = ans + it.second.size();
+        }
+        return ans;
+    }
+
+    void LFCPA::totalPointsToPairs()
+    {
+        errs() <<"\n\t#-------- Total Number Of PointsTo Pairs---------------#\n\n";
+        errs() << "\t\tBefore\t:\t" << before;
+        errs() << "\n\t\tAfter\t:\t" << after;
+        errs() <<"\n\t#-----------------------------------------------------------#\n";
+    }
 
 //-------------------- functionPass ----------------------------//
 	class BValueContext : public FunctionPass
