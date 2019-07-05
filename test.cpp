@@ -1,30 +1,26 @@
 #include "myHeader.h"
 
-int **y, *v, **z, *u, *x, w, t;
+int **y, *v, **z, *u, *x, w, b;
+
+void func()
+{
+    x = u;
+    isLive(v);
+}
 
 int main(){
     y = &v;
     z = &u;
-    x = &t;
-    isPointingTo(t,x);
-    isPointingTo(y,v);
-    if(*x > w)
-    {
-        x = &w;
-    }
-    else
-    {
-        x = *y;
-    }
+    x = &w;
+    v = &b;
+    isLive(u);
+    isLive(x);
+
     while(w>0)
     {
-        isLive(y);
-        isLive(u);
-        isLive(z);
-        isLive(x);
-        x = *y;
-        z = &v;
-
+        func();
+        u = *y;
     }
-    return **z;
+    isPointingTo(x,b);
+    return *x;
 }

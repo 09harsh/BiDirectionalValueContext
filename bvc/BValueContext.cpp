@@ -283,7 +283,7 @@ namespace
                     tempIns--;
                     OUT[std::make_tuple(currentContext, currentFunction, currentIns)].second = IN[std::make_tuple(currentContext, currentFunction, &(*tempIns))].second;
                 }
-                //function call
+                //function call isa<CallInst>(currentIns)
                 if(currentIns->getOpcode() == 55)
                 {
                     long long int  numberOfArg = currentIns->operands().end() - currentIns->operands().begin() - 1;
@@ -620,10 +620,11 @@ namespace
         totalPointers.clear();
         after = findTotalPointer();
 
+        // printTransitionGraph();
         pointsToTestResult();
         livenessTestResult();
         totalPointsToPairs();
-        // printTransitionGraph();
+        
     }
 
 
